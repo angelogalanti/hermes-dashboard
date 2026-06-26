@@ -487,6 +487,12 @@
       margin-left: auto;
     }
 
+    /* ── SOUL/AGENTS Modal size ──────── */
+    .skill-modal.soul-modal {
+      max-width: 800px;
+      width: min(90%, 800px);
+    }
+
     /* ── Kanban Board ───────────────── */
     .kanban-board {
       display: flex;
@@ -809,11 +815,11 @@
 
   <!-- SOUL/AGENTS Modal -->
   <div class="skill-modal-overlay" id="soul-modal" onclick="closeSoulModal(event)">
-    <div class="skill-modal" onclick="event.stopPropagation()">
+    <div class="skill-modal soul-modal" onclick="event.stopPropagation()">
       <button class="skill-modal-close" onclick="closeSoulModal()">&times;</button>
       <div class="skill-modal-name"><i class="fa-solid fa-scroll"></i> <span id="soul-modal-title"></span></div>
       <div class="skill-modal-category" id="soul-modal-subtitle"></div>
-      <pre id="soul-modal-content" style="background:#161b22;border:1px solid #21262d;border-radius:6px;padding:16px;font-size:13px;color:#c9d1d9;white-space:pre-wrap;word-wrap:break-word;max-height:400px;overflow-y:auto;font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;"></pre>
+      <pre id="soul-modal-content" style="background:#161b22;border:1px solid #21262d;border-radius:6px;padding:16px;font-size:13px;color:#c9d1d9;white-space:pre-wrap;word-wrap:break-word;max-height:70vh;overflow-y:auto;font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;"></pre>
     </div>
   </div>
 
