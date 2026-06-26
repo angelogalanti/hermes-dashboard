@@ -33,3 +33,4 @@ instance/
 # Environment
 .env
 *.local
+.jj/
