@@ -595,6 +595,31 @@
       font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
       color: #484f58;
     }
+
+    .kanban-card-archive {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: none;
+      border: none;
+      color: #484f58;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 2px;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+      line-height: 1;
+      z-index: 2;
+    }
+    .kanban-card:hover .kanban-card-archive {
+      opacity: 1;
+    }
+    .kanban-card-archive:hover {
+      color: #d29922;
+    }
+    .kanban-card.archive {
+      position: relative;
+    }
     .kanban-card-assignee {
       display: flex;
       align-items: center;
@@ -1102,8 +1127,13 @@
 
         colTasks.forEach(t => {
           const card = document.createElement('div');
-          card.className = 'kanban-card';
+          card.className = 'kanban-card' + (col.id === 'blocked' ? ' archive' : '');
+          let archiveBtn = '';
+          if (col.id === 'blocked') {
+            archiveBtn = '<button class="kanban-card-archive" title="Archivia task" onclick="archiveTask(\'' + esc(t.id) + '\', event)"><i class="fa-solid fa-box-archive"></i></button>';
+          }
           card.innerHTML =
+            archiveBtn +
             '<div class="kanban-card-title">' + esc(t.title) + '</div>' +
             '<div class="kanban-card-meta">' +
             '<span class="kanban-card-id">' + esc(shortId(t.id)) + '</span>' +
@@ -1114,6 +1144,21 @@
           cardsEl.appendChild(card);
         });
       });
+    }
+
+    // ── Archive task ────────────────────────────────────────────
+    async function archiveTask(taskId, event) {
+      if (event) event.stopPropagation();
+      if (!confirm('Archiviare il task ' + taskId + '?')) return;
+      try {
+        const resp = await fetch('/api/kanban/archive/' + encodeURIComponent(taskId), {
+          method: 'POST',
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        await refresh();
+      } catch (err) {
+        console.error('Errore archiviazione task:', err);
+      }
     }
 
     // ── Render Skill Locali (card per profilo) ────────────────────

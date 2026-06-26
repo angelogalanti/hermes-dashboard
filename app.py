@@ -38,7 +38,7 @@ def _pid_is_alive(pid: int | None) -> bool:
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Headers'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
     return response
 
 
@@ -551,6 +551,23 @@ def api_profile_agents(name):
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
+
+
+@app.route('/api/kanban/archive/<task_id>', methods=['POST'])
+def api_kanban_archive(task_id):
+    """POST /api/kanban/archive/<task_id> — archive a kanban task."""
+    try:
+        conn = sqlite3.connect(str(KANBAN_DB))
+        cur = conn.cursor()
+        cur.execute('UPDATE tasks SET status = ? WHERE id = ?', ('archived', task_id))
+        conn.commit()
+        affected = cur.rowcount
+        conn.close()
+        if affected == 0:
+            return jsonify({'archived': False, 'task_id': task_id, 'error': 'task not found'}), 404
+        return jsonify({'archived': True, 'task_id': task_id})
+    except sqlite3.Error as e:
+        return jsonify({'archived': False, 'task_id': task_id, 'error': str(e)}), 500
 
 
 # ── Main ───────────────────────────────────────────────────────────
