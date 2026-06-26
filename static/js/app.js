@@ -27,6 +27,7 @@
     const kanbanBoard  = document.getElementById('kanban-board');
     const lastUpdateEl = document.getElementById('last-update');
     const refreshBtn   = document.getElementById('refresh-btn');
+    const healthBtn    = document.getElementById('health-btn');
     const triageCheck  = document.getElementById('triage-check');
 
     let autoTimer = null;
@@ -92,12 +93,23 @@
         renderSkillMatrixShared(data.profiles || []);
         renderSkillPrimary(data.profiles || []);
 
+        // Fetch and render skill bundles
+        try {
+          const bundleResp = await fetch('/api/skill-bundles');
+          if (bundleResp.ok) {
+            const bundles = await bundleResp.json();
+            renderSkillBundles(bundles);
+          }
+        } catch (bundleErr) {
+          console.error('Failed to load skill bundles:', bundleErr);
+        }
+
         const now = new Date();
         lastUpdateEl.textContent = 'Ultimo aggiornamento: ' +
           now.toLocaleTimeString('it-IT');
       } catch (err) {
         profilesBody.innerHTML =
-          '<tr><td colspan="7">' +
+          '<tr><td colspan="8">' +
           '<div class="error-state">' +
           '<i class="fas fa-triangle-exclamation"></i>' +
           'Errore nel caricamento dei dati: ' + err.message +
@@ -109,6 +121,21 @@
           '</div>';
       } finally {
         refreshBtn.classList.remove('loading');
+      }
+    }
+
+    // ── Test health ────────────────────────────────────────────
+    async function testHealth() {
+      healthBtn.classList.add('loading');
+      healthBtn.disabled = true;
+      try {
+        await fetch('/api/health?force=1');
+        await refresh();
+      } catch (err) {
+        console.error('Health test failed:', err);
+      } finally {
+        healthBtn.disabled = false;
+        healthBtn.classList.remove('loading');
       }
     }
 
@@ -135,7 +162,7 @@
     function renderProfiles(profiles) {
       if (!profiles.length) {
         profilesBody.innerHTML =
-          '<tr><td colspan="7">' +
+          '<tr><td colspan="8">' +
           '<div class="empty-state"><i class="fas fa-users-slash"></i>Nessun profilo configurato</div>' +
           '</td></tr>';
         return;
@@ -150,6 +177,11 @@
         const gatewayOn  = p.gateway === 'running' || p.gateway === 'connected';
         const gatewayDot = '<i class="fa-solid fa-circle" style="color:' +
           (gatewayOn ? '#3fb950' : '#f85149') + '; font-size:12px;"></i>';
+
+        // Health dot
+        const healthColor = p.health === 'ok' ? '#3fb950' :
+          p.health === 'error' ? '#f85149' : '#484f58';
+        const healthDot = '<i class="fa-solid fa-circle" title="' + esc(p.health || 'unknown') + '" style="color:' + healthColor + '; font-size:12px;"></i>';
 
         // Platforms
         const platforms = (p.platforms || []).map(pl => {
@@ -176,6 +208,7 @@
         html += '<tr class="profile-row" data-profile="' + safeName + '"' + onClick + '>' +
           '<td data-label="Profilo"><div class="profile-name">' + expandIcon + ' <i class="fa-solid fa-user"></i> ' + safeName + '</div></td>' +
           '<td data-label="Gateway">' + gatewayDot + '</td>' +
+          '<td data-label="Health">' + healthDot + '</td>' +
           '<td data-label="Piattaforme"><div class="platform-icons">' + platforms + '</div></td>' +
           '<td data-label="Modello"><span class="model-cell">' + esc(p.model || '-') + '</span></td>' +
           '<td data-label="Provider"><span class="provider-cell">' + esc(p.provider || '-') + '</span></td>' +
@@ -208,7 +241,7 @@
           }
 
           html += '<tr class="skill-detail-row" id="skills-' + safeName + '" style="display:none">' +
-            '<td colspan="7">' +
+            '<td colspan="8">' +
             '<div class="skill-title"><i class="fa-solid fa-puzzle-piece"></i> Skill</div>' +
             '<div class="skill-list">' + skillItems + '</div>' +
             '</td>' +
@@ -524,6 +557,55 @@
       return div.innerHTML;
     }
 
+    // ── Render Skill Bundles ─────────────────────────────────────
+    function renderSkillBundles(bundles) {
+      const contentEl = document.getElementById('skill-bundles-content');
+      if (!contentEl) return;
+
+      if (!bundles || !bundles.length) {
+        contentEl.innerHTML =
+          '<div class="empty-state"><i class="fa-solid fa-layer-group"></i>Nessun bundle di skill configurato</div>';
+        return;
+      }
+
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;';
+
+      bundles.forEach(b => {
+        const skillCount = b.skills ? b.skills.length : 0;
+        const skillWord = 'skill';
+
+        const skillsSnippet = b.skills ? b.skills.slice(0, 3).map(s =>
+          '<span style="background:#1f242c;border:1px solid #30363d;border-radius:4px;padding:2px 6px;font-size:11px;color:#8b949e;display:inline-flex;align-items:center;gap:4px;">' +
+          '<i class="fa-solid fa-puzzle-piece" style="color:#2ea043;font-size:9px;"></i>' + esc(s) +
+          '</span>'
+        ).join(' ') + (skillCount > 3 ? ' <span style="font-size:11px;color:#8b949e;">+' + (skillCount - 3) + '</span>' : '') : '';
+
+        const card = document.createElement('div');
+        card.className = 'skill-bundle-card';
+        card.innerHTML =
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<i class="fa-solid fa-layer-group" style="color:#00cbd6;font-size:13px;"></i>' +
+              '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + esc(b.name) + '</span>' +
+            '</div>' +
+            '<span style="background:#1f2937;color:#c9d1d9;font-size:11px;padding:2px 6px;border-radius:12px;font-weight:500;">' +
+              skillCount + ' ' + skillWord +
+            '</span>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#8b949e;line-height:1.4;min-height:18px;">' + esc(b.description) + '</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">' +
+            skillsSnippet +
+          '</div>';
+
+        card.addEventListener('click', () => openSkillModal(b, null, 'bundle'));
+        grid.appendChild(card);
+      });
+
+      contentEl.innerHTML = '';
+      contentEl.appendChild(grid);
+    }
+
     // ── Skill Modal ──────────────────────────────────────────────
     function openSkillModal(skillObj, profileName, type) {
       const overlay = document.getElementById('skill-modal');
@@ -533,9 +615,75 @@
         try { skillObj = JSON.parse(skillObj); } catch (e) { return; }
       }
 
-      // Fill in data
+      // Elementi aggiuntivi del bundle
+      const bundleDetails = document.getElementById('modal-bundle-details');
+      const bundleSkills = document.getElementById('modal-bundle-skills');
+      const bundleInstructionContainer = document.getElementById('modal-bundle-instruction-container');
+      const bundleInstruction = document.getElementById('modal-bundle-instruction');
+
+      // Elementi standard da nascondere/mostrare
+      const statsEl = overlay.querySelector('.skill-modal-stats');
+      const datesEl = overlay.querySelector('.skill-modal-dates');
+      const stateEl = document.getElementById('modal-state');
+      const pinnedEl = document.getElementById('modal-pinned');
+
+      if (type === 'bundle') {
+        if (statsEl) statsEl.style.display = 'none';
+        if (datesEl) datesEl.style.display = 'none';
+        if (stateEl) stateEl.style.display = 'none';
+        if (pinnedEl) pinnedEl.style.display = 'none';
+
+        if (bundleDetails) {
+          bundleDetails.style.display = 'flex';
+
+          if (bundleSkills) {
+            bundleSkills.innerHTML = (skillObj.skills || []).map(s =>
+              '<span style="background:#161b22;border:1px solid #30363d;border-radius:4px;padding:4px 8px;font-size:12px;color:#c9d1d9;display:inline-flex;align-items:center;gap:6px;">' +
+              '<i class="fa-solid fa-puzzle-piece" style="color:#2ea043;font-size:10px;"></i>' + esc(s) +
+              '</span>'
+            ).join('');
+          }
+
+          if (bundleInstructionContainer && bundleInstruction) {
+            if (skillObj.instruction) {
+              bundleInstruction.textContent = skillObj.instruction;
+              bundleInstructionContainer.style.display = 'block';
+            } else {
+              bundleInstruction.textContent = '';
+              bundleInstructionContainer.style.display = 'none';
+            }
+          }
+        }
+      } else {
+        if (statsEl) statsEl.style.display = 'flex';
+        if (datesEl) datesEl.style.display = 'flex';
+        if (stateEl) stateEl.style.display = 'block';
+
+        if (bundleDetails) bundleDetails.style.display = 'none';
+
+        document.getElementById('modal-use-count').textContent = skillObj.use_count || 0;
+        document.getElementById('modal-view-count').textContent = skillObj.view_count || 0;
+        document.getElementById('modal-patch-count').textContent = skillObj.patch_count || 0;
+
+        const state = skillObj.state || 'active';
+        stateEl.className = 'skill-modal-state ' + (state === 'active' ? 'active' : 'inactive');
+        stateEl.innerHTML = '<i class="fa-solid fa-circle"></i> ' + state.charAt(0).toUpperCase() + state.slice(1);
+
+        setModalDate('modal-created-at', skillObj.created_at);
+        setModalDate('modal-last-used-at', skillObj.last_used_at);
+        setModalDate('modal-last-viewed-at', skillObj.last_viewed_at);
+        setModalDate('modal-last-patched-at', skillObj.last_patched_at);
+
+        if (skillObj.pinned) {
+          pinnedEl.style.display = 'inline-flex';
+        } else {
+          pinnedEl.style.display = 'none';
+        }
+      }
+
       document.getElementById('modal-name').textContent = skillObj.name || '';
-      document.getElementById('modal-category').textContent = skillObj.category || '(senza categoria)';
+      document.getElementById('modal-category').textContent = type === 'bundle' ? 'Skill Bundle' : (skillObj.category || '(senza categoria)');
+
       const descEl = document.getElementById('modal-description');
       const desc = skillObj.description || '';
       if (desc) {
@@ -545,42 +693,18 @@
         descEl.textContent = '';
         descEl.style.display = 'none';
       }
-      document.getElementById('modal-use-count').textContent = skillObj.use_count || 0;
-      document.getElementById('modal-view-count').textContent = skillObj.view_count || 0;
-      document.getElementById('modal-patch-count').textContent = skillObj.patch_count || 0;
 
-      // State badge
-      const stateEl = document.getElementById('modal-state');
-      const state = skillObj.state || 'active';
-      stateEl.className = 'skill-modal-state ' + (state === 'active' ? 'active' : 'inactive');
-      stateEl.innerHTML = '<i class="fa-solid fa-circle"></i> ' + state.charAt(0).toUpperCase() + state.slice(1);
-
-      // Dates
-      setModalDate('modal-created-at', skillObj.created_at);
-      setModalDate('modal-last-used-at', skillObj.last_used_at);
-      setModalDate('modal-last-viewed-at', skillObj.last_viewed_at);
-      setModalDate('modal-last-patched-at', skillObj.last_patched_at);
-
-      // Meta: profile / shared info
-      const metaEl = document.getElementById('modal-meta');
       const profileSpan = document.getElementById('modal-profile-name');
       if (type === 'local') {
         profileSpan.textContent = 'Profilo: ' + (profileName || '?');
       } else if (type === 'primary') {
         profileSpan.textContent = 'Skill primaria — solo default e ceo';
-      } else {
+      } else if (type === 'shared') {
         profileSpan.textContent = 'Skill condivisa — presente in tutti i profili';
+      } else if (type === 'bundle') {
+        profileSpan.textContent = 'Disponibile globalmente — carica le skill abilitate nel profilo corrente';
       }
 
-      // Pinned badge
-      const pinnedEl = document.getElementById('modal-pinned');
-      if (skillObj.pinned) {
-        pinnedEl.style.display = 'inline-flex';
-      } else {
-        pinnedEl.style.display = 'none';
-      }
-
-      // Show
       overlay.classList.add('open');
     }
 

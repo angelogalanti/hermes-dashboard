@@ -10,7 +10,9 @@ import sqlite3
 from pathlib import Path
 
 import yaml
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+
+import health_check
 
 app = Flask(__name__)
 
@@ -506,14 +508,36 @@ def load_kanban() -> list[dict]:
         return []
 
 
+# ── Health-check helper ────────────────────────────────────────
+def _get_profile_health() -> dict[str, str]:
+    """Legge health dalla cache (senza testare). Torna {name: 'ok'/'error'/'unknown'}."""
+    cache = health_check._read_cache()
+    if cache:
+        return cache.get('profiles', {})
+    return {}
+
+
 # ── Endpoint ───────────────────────────────────────────────────────
 @app.route('/api/status')
 def api_status():
-    """GET /api/status → JSON con profili e task kanban."""
+    """GET /api/status → JSON con profili, task kanban e health."""
+    profiles = load_profiles()
+    health_map = _get_profile_health()
+    for p in profiles:
+        p['health'] = health_map.get(p['name'], 'unknown')
     return jsonify({
-        'profiles': load_profiles(),
+        'profiles': profiles,
         'kanban': load_kanban(),
     })
+
+
+@app.route('/api/health')
+def api_health():
+    """GET /api/health → JSON con health-check dei provider.
+       GET /api/health?force=1 → ignora cache, rifà i test.
+    """
+    force = request.args.get('force', '').lower() in ('1', 'true', 'yes')
+    return jsonify(health_check.run(force=force))
 
 
 @app.route('/api/profile/<name>/soul')
@@ -551,6 +575,37 @@ def api_profile_agents(name):
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
+
+
+@app.route('/api/skill-bundles')
+def api_skill_bundles():
+    """GET /api/skill-bundles — Legge i bundle presenti in ~/.hermes/skill-bundles/*.yaml."""
+    bundles_dir = Path.home() / '.hermes' / 'skill-bundles'
+    bundles = []
+    if bundles_dir.is_dir():
+        for f in sorted(bundles_dir.glob('*.yaml')) + sorted(bundles_dir.glob('*.yml')):
+            try:
+                with open(f, encoding='utf-8') as fh:
+                    data = yaml.safe_load(fh)
+                if isinstance(data, dict):
+                    name = data.get('name') or f.stem
+                    description = data.get('description', '')
+                    skills = data.get('skills', [])
+                    instruction = data.get('instruction', '')
+
+                    if not isinstance(skills, list):
+                        skills = [skills] if skills else []
+
+                    bundles.append({
+                        'name': str(name).strip(),
+                        'description': str(description).strip(),
+                        'skills': [str(s).strip() for s in skills if s],
+                        'instruction': str(instruction).strip(),
+                        'path': str(f)
+                    })
+            except Exception:
+                pass
+    return jsonify(bundles)
 
 
 @app.route('/api/kanban/archive/<task_id>', methods=['POST'])
