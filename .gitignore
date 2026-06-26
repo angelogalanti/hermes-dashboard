@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtualenv
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flask
+instance/
+*.db
+
+# PID file (run.sh)
+.dashboard.pid
+
+# Backup files
+*.bak
+*.orig
+
+# Environment
+.env
+*.local
