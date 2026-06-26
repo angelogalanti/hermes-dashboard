@@ -911,6 +911,7 @@
         renderSkillListByProfile(data.profiles || []);
         renderSkillMatrixShared(data.profiles || []);
         renderSkillPrimary(data.profiles || []);
+        attachSkillCardListeners();
 
         const now = new Date();
         lastUpdateEl.textContent = 'Ultimo aggiornamento: ' +
@@ -1156,7 +1157,7 @@
             const ago = sk.last_used_at ? timeAgo(sk.last_used_at) : '';
             const skillJson = esc(JSON.stringify(sk));
 
-            html += '<div class="skill-card" onclick="openSkillModal(' + "'" + skillJson.replace(/'/g, "&#39;") + "'" + ", '" + esc(p.name) + "', 'local')" + '">' +
+            html += '<div class="skill-card" data-skill="' + skillJson + '" data-profile="' + esc(p.name) + '" data-type="local">' +
               '<div style="display:flex;align-items:center;gap:8px;">' +
               '<i class="fa-solid fa-puzzle-piece" style="color:#d2a8ff;font-size:13px;"></i>' +
               '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + esc(sk.name) + '</span>' +
@@ -1224,7 +1225,7 @@
         const ago = sk.last_used_at ? timeAgo(sk.last_used_at) : '';
         const skillJson = esc(JSON.stringify(sk));
 
-        html += '<div class="skill-card" onclick="openSkillModal(' + "'" + skillJson.replace(/'/g, "&#39;") + "'" + ", '', 'shared')" + '">' +
+        html += '<div class="skill-card" data-skill="' + skillJson + '" data-profile="" data-type="shared">' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
           '<i class="fa-solid fa-puzzle-piece" style="color:#d2a8ff;font-size:13px;"></i>' +
           '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + esc(sk.name) + '</span>' +
@@ -1271,7 +1272,7 @@
         const ago = sk.last_used_at ? timeAgo(sk.last_used_at) : '';
         const skillJson = esc(JSON.stringify(sk));
 
-        html += '<div class="skill-card" onclick="openSkillModal(' + "'" + skillJson.replace(/'/g, "&#39;") + "'" + ", '', 'primary')" + '">' +
+        html += '<div class="skill-card" data-skill="' + skillJson + '" data-profile="" data-type="primary">' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
           '<i class="fa-solid fa-crown" style="color:#d29922;font-size:13px;"></i>' +
           '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + esc(sk.name) + '</span>' +
@@ -1388,6 +1389,24 @@
       const overlay = document.getElementById('skill-modal');
       if (!overlay) return;
       overlay.classList.remove('open');
+    }
+
+    // ── Attach skill card click listeners (data-attributes) ──────
+    function attachSkillCardListeners() {
+      document.querySelectorAll('.skill-card').forEach(el => {
+        if (el.dataset.skillListener) return;
+        el.dataset.skillListener = '1';
+        el.addEventListener('click', function() {
+          try {
+            const skillData = JSON.parse(this.dataset.skill);
+            const profile = this.dataset.profile || '';
+            const type = this.dataset.type || 'shared';
+            openSkillModal(skillData, profile, type);
+          } catch (e) {
+            console.error('Skill modal error:', e);
+          }
+        });
+      });
     }
 
     function openSoulModal(profileName) {
