@@ -1,4 +1,3 @@
-# Test Opzione C — worktree nativo + merge con jj
 #!/usr/bin/env python3
 """Hermes Dashboard API — JSON status endpoint.
 
@@ -6,7 +5,6 @@ Exposes GET /api/status with profiles and kanban data.
 """
 
 import json
-# Test Opzione C — worktree nativo + merge con jj
 import os
 import sqlite3
 from pathlib import Path
