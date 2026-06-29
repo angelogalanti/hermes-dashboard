@@ -1,3 +1,7 @@
+# dashboard-trading
+
+> **Hub Centrale**: Obsidian `comune/progetti/mega-sistema/README.md` · **Ruolo di questo repo**: Web dashboard in Next.js/React per monitorare l'andamento del trading engine live.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
