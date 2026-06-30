@@ -42,3 +42,8 @@ next-env.d.ts
 
 # kanban worktrees
 .worktrees/
+
+# local databases
+/data/
+*.db
+
