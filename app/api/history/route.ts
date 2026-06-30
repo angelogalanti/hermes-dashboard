@@ -3,7 +3,10 @@ import path from "path";
 import fs from "fs";
 import { createRequire } from "module";
 
+export const dynamic = "force-dynamic";
+
 const DB_PATH = path.join(process.cwd(), "data", "equity.db");
+
 
 export async function GET() {
   try {

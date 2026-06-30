@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 const HL_API = "https://api.hyperliquid.xyz/info";
 const USER = "0xB9b7A899C2A6E6BDcc0B87BA2148C1dF046A07e9";
+
 
 export async function GET() {
   try {
