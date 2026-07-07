@@ -34,6 +34,7 @@ export default function BacktestTab({ backtest }: BacktestTabProps) {
   const [backtestSystemView, setBacktestSystemView] = useState<"equity" | "drawdown">("equity");
   const [backtestScale, setBacktestScale] = useState<"linear" | "log">("linear");
   const [hiddenSystems, setHiddenSystems] = useState<Record<string, boolean>>({});
+  const [showBtc, setShowBtc] = useState(true);
 
   const toggleSystem = (id: string) => {
     setHiddenSystems((prev) => ({
@@ -77,11 +78,38 @@ export default function BacktestTab({ backtest }: BacktestTabProps) {
       }
       point[s.id] = val;
     });
+
+    // Also look up btc_price from backtest.book.daily at or before 't'
+    let btcVal: number | undefined;
+    for (let i = backtest.book.daily.length - 1; i >= 0; i--) {
+      if (backtest.book.daily[i].time <= t) {
+        btcVal = backtest.book.daily[i].btc_price;
+        break;
+      }
+    }
+    point["btc_price"] = btcVal;
+
     return point;
   });
 
   return (
     <div className="mt-6 space-y-6">
+      {/* Option bar at the top */}
+      <div className="flex justify-between items-center bg-slate-800/30 border border-slate-700/30 rounded-xl px-5 py-3.5 shadow-sm">
+        <span className="text-slate-400 text-xs font-medium uppercase tracking-wider">Opzioni Grafici</span>
+        <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-350 hover:text-white transition-colors select-none">
+          <input
+            type="checkbox"
+            checked={showBtc}
+            onChange={(e) => setShowBtc(e.target.checked)}
+            className="rounded border-slate-750 bg-slate-900 text-amber-500 focus:ring-amber-500 focus:ring-offset-slate-900 focus:ring-1 cursor-pointer"
+          />
+          <span className="flex items-center gap-1.5">
+            <i className="fab fa-bitcoin text-amber-400" />
+            Mostra Prezzo BTC (Scala DX)
+          </span>
+        </label>
+      </div>
       {/* ---- BACKTEST STORICO MEGA-SISTEMA ---- */}
       {backtest.book.daily.length > 1 && (
         <Card className="p-6">
@@ -144,37 +172,80 @@ export default function BacktestTab({ backtest }: BacktestTabProps) {
                       minTickGap={50}
                     />
                     <YAxis
+                      yAxisId="left"
+                      orientation="left"
                       domain={["auto", "auto"]}
                       tick={{ fontSize: 10, fill: "#94a3b8" }}
                       tickFormatter={(v: number) => `${v.toFixed(1)}×`}
                       axisLine={false}
                       tickLine={false}
-                      width={50}
+                      width={45}
                     />
+                    {showBtc && (
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        domain={["auto", "auto"]}
+                        tick={{ fontSize: 10, fill: "#fbbf24" }}
+                        tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+                        axisLine={false}
+                        tickLine={false}
+                        width={45}
+                      />
+                    )}
                     <Tooltip
                       content={({ active, payload }: any) => {
                         if (!active || !payload?.length) return null;
                         const d = payload[0].payload;
+                        const eqPayload = payload.find((p: any) => p.dataKey === "equity");
+                        const btcPayload = showBtc ? payload.find((p: any) => p.dataKey === "btc_price") : null;
                         return (
                           <div className="rounded-lg border border-slate-600/50 bg-slate-800/95 px-3 py-2 shadow-xl backdrop-blur-sm">
-                            <p className="text-[11px] text-slate-400 mb-0.5">{d.date}</p>
-                            <p className="text-sm font-semibold font-mono text-slate-100">
-                              {d.equity.toFixed(4)}× <span className="text-slate-500 text-[10px]">({((d.equity - 1) * 100).toFixed(1)}%)</span>
-                            </p>
+                            <p className="text-[11px] text-slate-400 mb-1.5">{d.date}</p>
+                            {eqPayload && (
+                              <p className="text-xs font-mono text-violet-300">
+                                Equity: {eqPayload.value.toFixed(4)}× <span className="text-slate-500 text-[10px]">({((eqPayload.value - 1) * 100).toFixed(1)}%)</span>
+                              </p>
+                            )}
+                            {btcPayload && btcPayload.value !== undefined && (
+                              <p className="text-xs font-mono text-amber-400 mt-1">
+                                Prezzo BTC: ${btcPayload.value.toLocaleString("it-IT", { minimumFractionDigits: 2 })}
+                              </p>
+                            )}
                           </div>
                         );
                       }}
                       cursor={{ stroke: "#64748b", strokeDasharray: "3 3" }}
                     />
+                    <Legend
+                      wrapperStyle={{ fontSize: 10, color: "#94a3b8", paddingTop: 8 }}
+                    />
                     <Area
+                      yAxisId="left"
+                      name="Equity Mega-Sistema (Scala SX)"
                       type="monotone"
                       dataKey="equity"
                       stroke="#a78bfa"
                       strokeWidth={2}
                       fill="url(#btEqGrad)"
                       dot={false}
+                      connectNulls
                       animationDuration={800}
                     />
+                    {showBtc && (
+                      <Line
+                        yAxisId="right"
+                        name="Prezzo BTC (Scala DX)"
+                        type="monotone"
+                        dataKey="btc_price"
+                        stroke="#fbbf24"
+                        strokeWidth={1.5}
+                        strokeDasharray="4 4"
+                        dot={false}
+                        connectNulls
+                        animationDuration={800}
+                      />
+                    )}
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -369,6 +440,8 @@ export default function BacktestTab({ backtest }: BacktestTabProps) {
                   minTickGap={50}
                 />
                 <YAxis
+                  yAxisId="left"
+                  orientation="left"
                   scale={backtestSystemView === "equity" ? backtestScale : "linear"}
                   domain={backtestSystemView === "equity" ? ["auto", "auto"] : ["auto", 0]}
                   tick={{ fontSize: 10, fill: "#94a3b8" }}
@@ -379,8 +452,20 @@ export default function BacktestTab({ backtest }: BacktestTabProps) {
                   }
                   axisLine={false}
                   tickLine={false}
-                  width={55}
+                  width={50}
                 />
+                {showBtc && (
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={["auto", "auto"]}
+                    tick={{ fontSize: 10, fill: "#fbbf24" }}
+                    tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+                    axisLine={false}
+                    tickLine={false}
+                    width={45}
+                  />
+                )}
                 {backtestSystemView === "equity" && (
                   <ReferenceLine y={100} stroke="#475569" strokeDasharray="3 3" />
                 )}
@@ -391,10 +476,12 @@ export default function BacktestTab({ backtest }: BacktestTabProps) {
                   content={({ active, payload }: any) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0]?.payload;
+                    const btcPayload = showBtc ? payload.find((p: any) => p.dataKey === "btc_price") : null;
                     return (
                       <div className="rounded-lg border border-slate-600/50 bg-slate-800/95 px-3 py-2 shadow-xl backdrop-blur-sm">
                         <p className="text-[11px] text-slate-400 mb-1">{d?.date}</p>
                         {payload.map((p: any) => {
+                          if (p.dataKey === "btc_price") return null;
                           const displayVal = backtestSystemView === "equity" ? p.value - 100 : p.value;
                           return (
                             <p key={p.dataKey} className="text-xs font-mono" style={{ color: p.color }}>
@@ -403,6 +490,11 @@ export default function BacktestTab({ backtest }: BacktestTabProps) {
                             </p>
                           );
                         })}
+                        {btcPayload && btcPayload.value !== undefined && (
+                          <p className="text-xs font-mono text-amber-400 border-t border-slate-700/50 mt-1.5 pt-1.5">
+                            Prezzo BTC: ${btcPayload.value.toLocaleString("it-IT", { minimumFractionDigits: 2 })}
+                          </p>
+                        )}
                       </div>
                     );
                   }}
@@ -414,6 +506,7 @@ export default function BacktestTab({ backtest }: BacktestTabProps) {
                     if (dataKey) toggleSystem(dataKey);
                   }}
                   formatter={(value: string) => {
+                    if (value === "btc_price") return "Prezzo BTC (Scala DX)";
                     const isHidden = !!hiddenSystems[value];
                     return (
                       <span className={`cursor-pointer hover:text-slate-200 transition-colors ${isHidden ? "opacity-40 line-through" : ""}`}>
@@ -425,6 +518,7 @@ export default function BacktestTab({ backtest }: BacktestTabProps) {
                 />
                 {backtest.systems.map((s) => (
                   <Line
+                    yAxisId="left"
                     key={s.id}
                     type="monotone"
                     dataKey={s.id}
@@ -437,6 +531,20 @@ export default function BacktestTab({ backtest }: BacktestTabProps) {
                     animationDuration={800}
                   />
                 ))}
+                {showBtc && (
+                  <Line
+                    yAxisId="right"
+                    name="Prezzo BTC (Scala DX)"
+                    type="monotone"
+                    dataKey="btc_price"
+                    stroke="#fbbf24"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    dot={false}
+                    connectNulls
+                    animationDuration={800}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>

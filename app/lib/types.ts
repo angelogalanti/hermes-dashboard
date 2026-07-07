@@ -60,6 +60,7 @@ export interface BacktestDailyPoint {
   time: number;
   equity: number;
   drawdown: number;
+  btc_price?: number;
 }
 
 export interface BacktestSystemMetrics {
@@ -101,9 +102,34 @@ export interface CoinSummary {
 /** Color map for system chart lines */
 export const SYSTEM_COLORS: Record<string, string> = {
   aw_multiasset: "#818cf8", // indigo
+  btc_mean_reversion: "#818cf8", // indigo
+  trend_multiasset: "#6366f1",   // violet
   donchian: "#f59e0b",      // amber
   stddev: "#10b981",        // emerald
   volsqueeze: "#f43f5e",    // rose
-  donchian_tilt: "#06b6d4", // cyan
+  donchian_tilt: "#38bdf8",     // light blue/cyan
+  donchian_baseline: "#06b6d4", // cyan
   nextbar_book: "#a855f7",  // purple
 };
+
+export interface DataFileStatus {
+  timeframe: string;
+  type: "spot" | "perp" | "forex";
+  startDate: string;
+  endDate: string;
+  rowCount: number;
+  fileSize: number;
+}
+
+export interface AssetStatus {
+  symbol: string;
+  category: "crypto" | "forex" | "futures";
+  files: DataFileStatus[];
+}
+
+export interface DataStatusResponse {
+  crypto: AssetStatus[];
+  forex: AssetStatus[];
+  futures: AssetStatus[];
+}
+

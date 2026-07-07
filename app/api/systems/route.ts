@@ -7,11 +7,11 @@ export const dynamic = "force-dynamic";
 const FORWARD_DIR = "/home/x/repos/auto-researchtrading/main/registry/forward";
 
 const SYSTEMS_CONFIG = [
-  { file: "aw_multiasset_v1_state.json", id: "aw_multiasset", name: "AllWeather", type: "live", avgTradesPerMonth: 14.0 },
-  { file: "donchian_v1_state.json", id: "donchian", name: "Donchian", type: "live", avgTradesPerMonth: 45.5 },
+  { file: "btc_mean_reversion_v1_state.json", id: "btc_mean_reversion", name: "MR (BTC)", type: "live", avgTradesPerMonth: 8.0 },
+  { file: "trend_multiasset_v1_state.json", id: "trend_multiasset", name: "Trend (Multi)", type: "live", avgTradesPerMonth: 6.0 },
+  { file: "donchian_tilt_v1_state.json", id: "donchian", name: "Donchian", type: "live", avgTradesPerMonth: 45.5 },
   { file: "stddev_v1_state.json", id: "stddev", name: "StdDev", type: "live", avgTradesPerMonth: 12.5 },
   { file: "volsqueeze_v1_state.json", id: "volsqueeze", name: "VolSqueeze", type: "forward", avgTradesPerMonth: 7.0 },
-  { file: "donchian_tilt_v1_state.json", id: "donchian_tilt", name: "Donchian Tilt", type: "forward", avgTradesPerMonth: 45.5 },
   { file: "nextbar_book_v1_state.json", id: "nextbar_book", name: "Nextbar Book", type: "forward", avgTradesPerMonth: 15.0 }, // Ribilanciamento ogni 2 giorni -> ~15/mese
 ];
 

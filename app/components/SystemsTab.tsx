@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -58,12 +59,96 @@ export default function SystemsTab({ systems }: SystemsTabProps) {
       }
       point[s.id] = val;
     });
+
+    // Calculate Mega-Sistema Portfolio return (weighted sum of live active systems)
+    // weights: MR 32% / Trend 25% / StdDev 15% / Donchian 15% (normalized to sum to 1.0)
+    let megaVal = 0;
+    const WEIGHTS: Record<string, number> = {
+      btc_mean_reversion: 0.32 / 0.87,
+      trend_multiasset: 0.25 / 0.87,
+      stddev: 0.15 / 0.87,
+      donchian: 0.15 / 0.87,
+    };
+    Object.keys(WEIGHTS).forEach((id) => {
+      megaVal += (point[id] ?? 0) * WEIGHTS[id];
+    });
+    point["mega_portfolio"] = megaVal;
+
     return point;
   });
 
   return (
     <div className="mt-6 space-y-6">
-      {/* Comparison chart */}
+      {/* 1. Mega-Sistema Chart Card */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between border-b border-slate-700/40 pb-3 mb-6">
+          <div className="flex items-center gap-2 text-slate-300 text-base font-semibold">
+            <i className="fas fa-wallet text-indigo-400" />
+            <span>Mega-Sistema Combinato (Forward Test Paper)</span>
+          </div>
+          <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider hidden sm:block">
+            Pesi: MR 36.8% · Trend 28.7% · StdDev 17.2% · Donchian 17.2%
+          </div>
+        </div>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={comparisonData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="megaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" strokeOpacity={0.4} />
+              <XAxis
+                dataKey="time"
+                type="number"
+                domain={["dataMin", "dataMax"]}
+                tickFormatter={(t: number) =>
+                  new Date(t).toLocaleDateString("it-IT", { day: "2-digit", month: "short" })
+                }
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                axisLine={false}
+                tickLine={false}
+                minTickGap={40}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                tickFormatter={(v: number) => `${v.toFixed(1)}%`}
+                axisLine={false}
+                tickLine={false}
+                width={50}
+              />
+              <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" />
+              <Tooltip
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0]?.payload;
+                  return (
+                    <div className="rounded-lg border border-slate-600/50 bg-slate-800/95 px-3 py-2 shadow-xl backdrop-blur-sm">
+                      <p className="text-[11px] text-slate-400 mb-1">{d?.label}</p>
+                      <p className="text-xs font-mono text-indigo-300">
+                        Rendimento: {d?.mega_portfolio >= 0 ? "+" : ""}{d?.mega_portfolio?.toFixed(2)}%
+                      </p>
+                    </div>
+                  );
+                }}
+                cursor={{ stroke: "#64748b", strokeDasharray: "3 3" }}
+              />
+              <Area
+                type="stepAfter"
+                dataKey="mega_portfolio"
+                stroke="#818cf8"
+                strokeWidth={2}
+                fill="url(#megaGrad)"
+                animationDuration={600}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* 2. Comparison chart */}
       <Card className="p-6">
         <div className="flex items-center justify-between border-b border-slate-700/40 pb-3 mb-6">
           <div className="flex items-center gap-2 text-slate-300 text-base font-semibold">

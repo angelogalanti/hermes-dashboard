@@ -7,10 +7,12 @@ import type {
   EquitySnapshot,
   SystemData,
   BacktestData,
+  DataStatusResponse,
 } from "@/app/lib/types";
 import MegaTab from "@/app/components/MegaTab";
 import SystemsTab from "@/app/components/SystemsTab";
 import BacktestTab from "@/app/components/BacktestTab";
+import DataStatusTab from "@/app/components/DataStatusTab";
 
 /* ------------------------------------------------------------------ */
 /*  Main dashboard                                                     */
@@ -22,8 +24,9 @@ export default function Dashboard() {
   const [history, setHistory] = useState<EquitySnapshot[]>([]);
   const [systems, setSystems] = useState<SystemData[]>([]);
   const [backtest, setBacktest] = useState<BacktestData | null>(null);
+  const [dataStatus, setDataStatus] = useState<DataStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeMainTab, setActiveMainTab] = useState<"mega" | "systems" | "backtest">("mega");
+  const [activeMainTab, setActiveMainTab] = useState<"mega" | "systems" | "backtest" | "datastatus">("mega");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -52,6 +55,15 @@ export default function Dashboard() {
           if (btData?.book) setBacktest(btData);
         }
       } catch { /* backtest non disponibile, silently skip */ }
+
+      // Fetch data status (static, non-blocking)
+      try {
+        const statusRes = await fetch("/api/data-status");
+        if (statusRes.ok) {
+          setDataStatus(await statusRes.json());
+        }
+      } catch { /* silently skip */ }
+
       setError(null);
     } catch (err: any) {
       setError(err.message);
@@ -81,7 +93,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main Tabs Control */}
-      <div className="grid grid-cols-1 md:grid-cols-3 border-b border-slate-700/40 mb-6 text-sm font-semibold">
+      <div className="grid grid-cols-1 md:grid-cols-4 border-b border-slate-700/40 mb-6 text-sm font-semibold font-medium">
         <button
           onClick={() => setActiveMainTab("mega")}
           className={`px-5 py-3 border-b-2 transition-all cursor-pointer flex items-center justify-center gap-2 ${
@@ -115,6 +127,17 @@ export default function Dashboard() {
           <i className="fas fa-history" />
           <span>Backtest Storico</span>
         </button>
+        <button
+          onClick={() => setActiveMainTab("datastatus")}
+          className={`px-5 py-3 border-b-2 transition-all cursor-pointer flex items-center justify-center gap-2 ${
+            activeMainTab === "datastatus"
+              ? "border-indigo-500 text-indigo-400"
+              : "border-transparent text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <i className="fas fa-database" />
+          <span>Stato Dati</span>
+        </button>
       </div>
 
       {activeMainTab === "mega" && (
@@ -131,6 +154,10 @@ export default function Dashboard() {
 
       {activeMainTab === "backtest" && (
         <BacktestTab backtest={backtest} />
+      )}
+
+      {activeMainTab === "datastatus" && (
+        <DataStatusTab dataStatus={dataStatus} />
       )}
     </main>
   );
