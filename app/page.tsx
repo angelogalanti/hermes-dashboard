@@ -22,6 +22,7 @@ export default function Dashboard() {
   const [account, setAccount] = useState<AccountData | null>(null);
   const [fills, setFills] = useState<Fill[]>([]);
   const [history, setHistory] = useState<EquitySnapshot[]>([]);
+  const [transfers, setTransfers] = useState<{ time: number; amount: number }[]>([]);
   const [systems, setSystems] = useState<SystemData[]>([]);
   const [backtest, setBacktest] = useState<BacktestData | null>(null);
   const [dataStatus, setDataStatus] = useState<DataStatusResponse | null>(null);
@@ -42,7 +43,9 @@ export default function Dashboard() {
       }
       setAccount(await accRes.json());
       setFills(await fillsRes.json());
-      setHistory(await historyRes.json());
+      const histData = await historyRes.json();
+      setHistory(histData.snapshots || []);
+      setTransfers(histData.transfers || []);
       if (systemsRes.ok) {
         const sysData = await systemsRes.json();
         if (Array.isArray(sysData)) setSystems(sysData);
@@ -145,6 +148,7 @@ export default function Dashboard() {
           account={account}
           fills={fills}
           history={history}
+          transfers={transfers}
         />
       )}
 

@@ -18,7 +18,7 @@ import type {
   Position,
   CoinSummary,
 } from "@/app/lib/types";
-import { fmt, sumClosedPnl, drawdownFromHistory, buildChartSeries } from "@/app/lib/helpers";
+import { fmt, sumClosedPnl, buildUnitizedChartSeries } from "@/app/lib/helpers";
 import { Card, MetricCard, ChartTooltip } from "@/app/components/ui";
 
 /* ------------------------------------------------------------------ */
@@ -29,19 +29,19 @@ interface MegaTabProps {
   account: AccountData | null;
   fills: Fill[];
   history: EquitySnapshot[];
+  transfers: { time: number; amount: number }[];
 }
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export default function MegaTab({ account, fills, history }: MegaTabProps) {
+export default function MegaTab({ account, fills, history, transfers }: MegaTabProps) {
   const [activeTab2026, setActiveTab2026] = useState<"coins" | "fills">("coins");
 
   /* ---- derived metrics ---- */
   const equity = account ? parseFloat(account.accountValue) : 0;
   const pnl24h = sumClosedPnl(fills, 24 * 60 * 60 * 1000);
-  const { peakEquity, maxDrawdownPct } = drawdownFromHistory(history, equity);
   const totalPositionValue = (account?.assetPositions ?? []).reduce(
     (s, p) => s + parseFloat(p.positionValue || "0"),
     0,
@@ -50,9 +50,18 @@ export default function MegaTab({ account, fills, history }: MegaTabProps) {
 
   /* ---- chart series (memoised) ---- */
   const { equitySeries, drawdownSeries } = useMemo(
-    () => buildChartSeries(history, equity),
-    [history, equity],
+    () => buildUnitizedChartSeries(history, transfers, equity),
+    [history, transfers, equity],
   );
+
+  const peakAbsoluteEquity = useMemo(() => {
+    const rawPeak = history.length > 0 ? Math.max(...history.map((h) => h.equity)) : 0;
+    return Math.max(rawPeak, equity);
+  }, [history, equity]);
+
+  const maxDrawdownPct = useMemo(() => {
+    return drawdownSeries.length > 0 ? Math.max(...drawdownSeries.map((d) => -d.drawdown)) : 0;
+  }, [drawdownSeries]);
 
   // Filter 2026 fills
   const START_OF_2026_MS = 1767225600000; // 2026-01-01T00:00:00Z
@@ -111,7 +120,7 @@ export default function MegaTab({ account, fills, history }: MegaTabProps) {
             label="Max Drawdown"
             value={`${maxDrawdownPct > 0 ? "-" : ""}${maxDrawdownPct.toFixed(2)}%`}
             valueColor="text-red-400"
-            sub={`Peak: $${fmt(peakEquity)}`}
+            sub={`Peak: $${fmt(peakAbsoluteEquity)}`}
           />
         </div>
 
@@ -377,7 +386,7 @@ export default function MegaTab({ account, fills, history }: MegaTabProps) {
                 <span>Analisi Storica Mega-Sistema</span>
               </div>
               <div className="flex gap-4 text-xs font-mono text-slate-400">
-                <span>Equity: <strong className="text-slate-200">${fmt(equitySeries[equitySeries.length - 1]?.equity ?? 0)}</strong></span>
+                <span>Equity: <strong className="text-slate-200">${fmt(equity)}</strong></span>
                 <span>Drawdown: <strong className="text-red-400">{(drawdownSeries[drawdownSeries.length - 1]?.drawdown ?? 0).toFixed(2)}%</strong></span>
               </div>
             </div>
@@ -387,7 +396,7 @@ export default function MegaTab({ account, fills, history }: MegaTabProps) {
               <div>
                 <div className="text-slate-400 text-xs font-medium mb-2 flex items-center gap-1">
                   <i className="fas fa-chart-area text-indigo-400/80 text-[10px]" />
-                  <span>Equity Curve</span>
+                  <span>Net Trading P&L (USD, Iniziale $0)</span>
                 </div>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -414,13 +423,25 @@ export default function MegaTab({ account, fills, history }: MegaTabProps) {
                       <YAxis
                         domain={["auto", "auto"]}
                         tick={{ fontSize: 10, fill: "#94a3b8" }}
-                        tickFormatter={(v: number) => `$${v.toFixed(0)}`}
+                        tickFormatter={(v: number) => `${v >= 0 ? "+" : ""}$${v.toFixed(0)}`}
                         axisLine={false}
                         tickLine={false}
                         width={60}
                       />
                       <Tooltip
-                        content={<ChartTooltip valueKey="equity" prefix="$" suffix="" />}
+                        content={({ active, payload }: any) => {
+                          if (!active || !payload?.length) return null;
+                          const d = payload[0].payload;
+                          const val = d.equity;
+                          return (
+                            <div className="rounded-lg border border-slate-600/50 bg-slate-800/95 px-3 py-2 shadow-xl backdrop-blur-sm">
+                              <p className="text-[11px] text-slate-400 mb-1">{d.label}</p>
+                              <p className="text-xs font-mono text-slate-100">
+                                P&L Netto: {val >= 0 ? "+" : ""}${fmt(val)}
+                              </p>
+                            </div>
+                          );
+                        }}
                         cursor={{ stroke: "#64748b", strokeDasharray: "3 3" }}
                       />
                       <Area
