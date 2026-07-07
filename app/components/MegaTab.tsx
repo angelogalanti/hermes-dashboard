@@ -38,6 +38,7 @@ interface MegaTabProps {
 
 export default function MegaTab({ account, fills, history, transfers }: MegaTabProps) {
   const [activeTab2026, setActiveTab2026] = useState<"coins" | "fills">("coins");
+  const [isClosedExpanded, setIsClosedExpanded] = useState(false);
 
   /* ---- derived metrics ---- */
   const equity = account ? parseFloat(account.accountValue) : 0;
@@ -98,177 +99,167 @@ export default function MegaTab({ account, fills, history, transfers }: MegaTabP
 
   return (
     <>
-      {/* two-column grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ---- LEFT: metric cards ---- */}
-        <div className="lg:col-span-1 space-y-4">
-          <MetricCard
-            icon="wallet"
-            label="Equity"
-            value={`$${fmt(equity)}`}
-          />
+      <div className="space-y-6">
+      {/* ---- TOP: metric cards (horizontal) ---- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <MetricCard
+          icon="wallet"
+          label="Equity"
+          value={`$${fmt(equity)}`}
+        />
 
-          <MetricCard
-            icon="clock"
-            label="P/L 24h"
-            value={`${pnl24h >= 0 ? "+" : ""}$${fmt(pnl24h)}`}
-            valueColor={pnl24h >= 0 ? "text-emerald-400" : "text-red-400"}
-          />
+        <MetricCard
+          icon="clock"
+          label="P/L 24h"
+          value={`${pnl24h >= 0 ? "+" : ""}$${fmt(pnl24h)}`}
+          valueColor={pnl24h >= 0 ? "text-emerald-400" : "text-red-400"}
+        />
 
-          <MetricCard
-            icon="arrow-trend-down"
-            label="Max Drawdown"
-            value={`${maxDrawdownPct > 0 ? "-" : ""}${maxDrawdownPct.toFixed(2)}%`}
-            valueColor="text-red-400"
-            sub={`Peak: $${fmt(peakAbsoluteEquity)}`}
-          />
+        <MetricCard
+          icon="arrow-trend-down"
+          label="Max Drawdown"
+          value={`${maxDrawdownPct > 0 ? "-" : ""}${maxDrawdownPct.toFixed(2)}%`}
+          valueColor="text-red-400"
+          sub={`Peak: $${fmt(peakAbsoluteEquity)}`}
+        />
+      </div>
+
+      {/* ---- MIDDLE: Open Positions Card ---- */}
+      <Card className="p-0 overflow-hidden">
+        {/* table header */}
+        <div className="flex items-center gap-2 px-5 pt-4 pb-3 text-slate-300 text-sm font-medium border-b border-slate-700/40">
+          <i className="fas fa-layer-group text-emerald-405" />
+          <span>Posizioni Aperte</span>
+          <span className="text-slate-500 text-xs ml-auto">
+            {positions.length} posizione/i
+          </span>
         </div>
 
-        {/* ---- RIGHT: positions table & closed positions summary ---- */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="p-0 overflow-hidden">
-            {/* table header */}
-            <div className="flex items-center gap-2 px-5 pt-4 pb-3 text-slate-300 text-sm font-medium border-b border-slate-700/40">
-              <i className="fas fa-layer-group" />
-              <span>Posizioni Aperte</span>
-              <span className="text-slate-500 text-xs ml-auto">
-                {positions.length} posizione/i
-              </span>
-            </div>
-
-            {positions.length === 0 ? (
-              <div className="px-5 py-8 text-slate-500 text-sm text-center">
-                {account ? (
-                  <>
-                    <i className="fas fa-ban mr-2" />
-                    Nessuna posizione aperta
-                  </>
-                ) : (
-                  <>
-                    <i className="fas fa-spinner fa-spin mr-2" />
-                    Loading...
-                  </>
-                )}
-              </div>
+        {positions.length === 0 ? (
+          <div className="px-5 py-8 text-slate-500 text-sm text-center">
+            {account ? (
+              <>
+                <i className="fas fa-ban mr-2" />
+                Nessuna posizione aperta
+              </>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-700/40">
-                      <th className="text-left text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
-                        Coin
-                      </th>
-                      <th className="text-right text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
-                        Size
-                      </th>
-                      <th className="text-right text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
-                        Notional $
-                      </th>
-                      <th className="text-right text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
-                        Entry
-                      </th>
-                      <th className="text-right text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
-                        Unreal. P/L
-                      </th>
-                      <th className="text-right text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
-                        % Book
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {positions.map((p) => {
-                      const szi = parseFloat(p.szi);
-                      const pv = parseFloat(p.positionValue || "0");
-                      const upnl = parseFloat(p.unrealizedPnl || "0");
-                      const entryPx = parseFloat(p.entryPx || "0");
-                      const bookPct =
-                        totalPositionValue > 0
-                          ? (pv / totalPositionValue) * 100
-                          : 0;
-
-                      return (
-                        <tr
-                          key={p.coin}
-                          className="border-b border-slate-700/20 hover:bg-slate-700/20 transition-colors"
-                        >
-                          <td className="font-medium text-slate-200 px-5 py-3">
-                            {p.coin}
-                          </td>
-                          <td
-                            className={`text-right font-mono px-5 py-3 ${
-                              szi >= 0 ? "text-emerald-400" : "text-red-400"
-                            }`}
-                          >
-                            <i
-                              className={`fas fa-arrow-${
-                                szi >= 0 ? "up" : "down"
-                              } mr-1 text-[10px]`}
-                            />
-                            {szi >= 0 ? "+" : ""}
-                            {fmt(szi)}
-                          </td>
-                          <td className="text-right font-mono text-slate-300 px-5 py-3">
-                            ${fmt(pv)}
-                          </td>
-                          <td className="text-right font-mono text-slate-300 px-5 py-3">
-                            ${fmt(entryPx)}
-                          </td>
-                          <td
-                            className={`text-right font-mono px-5 py-3 ${
-                              upnl >= 0 ? "text-emerald-400" : "text-red-400"
-                            }`}
-                          >
-                            {upnl >= 0 ? "+" : ""}${fmt(upnl)}
-                          </td>
-                          <td className="text-right font-mono text-slate-400 px-5 py-3">
-                            {bookPct.toFixed(1)}%
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <i className="fas fa-spinner fa-spin mr-2" />
+                Loading...
+              </>
             )}
-          </Card>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700/40">
+                  <th className="text-left text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
+                    Coin
+                  </th>
+                  <th className="text-right text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
+                    Size
+                  </th>
+                  <th className="text-right text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
+                    Notional $
+                  </th>
+                  <th className="text-right text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
+                    Entry
+                  </th>
+                  <th className="text-right text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
+                    Unreal. P/L
+                  </th>
+                  <th className="text-right text-slate-500 text-xs uppercase tracking-wider px-5 py-3">
+                    % Book
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((p) => {
+                  const szi = parseFloat(p.szi);
+                  const pv = parseFloat(p.positionValue || "0");
+                  const upnl = parseFloat(p.unrealizedPnl || "0");
+                  const entryPx = parseFloat(p.entryPx || "0");
+                  const bookPct =
+                    totalPositionValue > 0
+                      ? (pv / totalPositionValue) * 100
+                      : 0;
 
-          {/* ---- CLOSED POSITIONS SUMMARY (2026+) ---- */}
-          <Card className="p-0 overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center gap-2 px-5 pt-4 pb-3 text-slate-300 text-sm font-medium border-b border-slate-700/40 bg-slate-800/40">
-              <i className="fas fa-box-archive text-indigo-400" />
-              <span>Sintesi Posizioni Chiuse (dal 2026)</span>
-              <span className="text-slate-500 text-xs ml-auto">
-                {fills2026.length} eseguito/i
-              </span>
-            </div>
+                  return (
+                    <tr
+                      key={p.coin}
+                      className="border-b border-slate-700/20 hover:bg-slate-700/20 transition-colors"
+                    >
+                      <td className="font-medium text-slate-200 px-5 py-3">
+                        {p.coin}
+                      </td>
+                      <td
+                        className={`text-right font-mono px-5 py-3 ${
+                          szi >= 0 ? "text-emerald-400" : "text-red-400"
+                        }`}
+                      >
+                        <i
+                          className={`fas fa-arrow-${
+                            szi >= 0 ? "up" : "down"
+                          } mr-1 text-[10px]`}
+                        />
+                        {szi >= 0 ? "+" : ""}
+                        {fmt(szi)}
+                      </td>
+                      <td className="text-right font-mono text-slate-300 px-5 py-3">
+                        ${fmt(pv)}
+                      </td>
+                      <td className="text-right font-mono text-slate-300 px-5 py-3">
+                        ${fmt(entryPx)}
+                      </td>
+                      <td
+                        className={`text-right font-mono px-5 py-3 ${
+                          upnl >= 0 ? "text-emerald-400" : "text-red-400"
+                        }`}
+                      >
+                        {upnl >= 0 ? "+" : ""}${fmt(upnl)}
+                      </td>
+                      <td className="text-right font-mono text-slate-400 px-5 py-3">
+                        {bookPct.toFixed(1)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
-            {/* Quick Metrics */}
-            <div className="grid grid-cols-3 border-b border-slate-700/20 bg-slate-800/20">
-              <div className="px-5 py-4 border-r border-slate-700/20">
-                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">P/L Realizzato</span>
-                <span className={`text-lg font-bold font-mono ${totalRealizedPnl2026 >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                  {totalRealizedPnl2026 >= 0 ? "+" : ""}${fmt(totalRealizedPnl2026)}
-                </span>
-              </div>
-              <div className="px-5 py-4 border-r border-slate-700/20">
-                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Commissioni</span>
-                <span className="text-lg font-bold font-mono text-slate-300">
-                  ${fmt(totalFees2026)}
-                </span>
-              </div>
-              <div className="px-5 py-4">
-                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Operazioni</span>
-                <span className="text-lg font-bold font-mono text-slate-300">
-                  {totalTrades2026}
-                </span>
-              </div>
-            </div>
+      {/* ---- BOTTOM: Expandable Closed Positions Card ---- */}
+      <Card className="p-0 overflow-hidden">
+        {/* Clickable Header */}
+        <div
+          onClick={() => setIsClosedExpanded(!isClosedExpanded)}
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-4 cursor-pointer hover:bg-slate-800/10 transition-all select-none border-b border-slate-700/40"
+        >
+          <div className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+            <i className="fas fa-box-archive text-indigo-400" />
+            <span>Sintesi Posizioni Chiuse (dal 2026)</span>
+            <i className={`fas fa-chevron-${isClosedExpanded ? "up" : "down"} text-xs text-slate-500 ml-1.5`} />
+          </div>
 
+          <div className="flex gap-4 text-xs font-mono text-slate-400">
+            <span>Operazioni: <strong className="text-slate-200">{totalTrades2026}</strong></span>
+            <span>P/L Realizzato: <strong className={totalRealizedPnl2026 >= 0 ? "text-emerald-400" : "text-red-400"}>
+              {totalRealizedPnl2026 >= 0 ? "+" : ""}${fmt(totalRealizedPnl2026)}
+            </strong></span>
+            <span>Commissioni: <strong className="text-slate-300">${fmt(totalFees2026)}</strong></span>
+          </div>
+        </div>
+
+        {/* Expandable Content */}
+        {isClosedExpanded && (
+          <div>
             {/* Tabs Control */}
             <div className="flex border-b border-slate-700/20 text-xs font-semibold px-4 pt-2 bg-slate-800/10">
               <button
-                onClick={() => setActiveTab2026("coins")}
+                onClick={(e) => { e.stopPropagation(); setActiveTab2026("coins"); }}
                 className={`px-4 py-2 border-b-2 transition-all cursor-pointer ${
                   activeTab2026 === "coins"
                     ? "border-indigo-500 text-indigo-400"
@@ -278,7 +269,7 @@ export default function MegaTab({ account, fills, history, transfers }: MegaTabP
                 Sintesi Coin
               </button>
               <button
-                onClick={() => setActiveTab2026("fills")}
+                onClick={(e) => { e.stopPropagation(); setActiveTab2026("fills"); }}
                 className={`px-4 py-2 border-b-2 transition-all cursor-pointer ${
                   activeTab2026 === "fills"
                     ? "border-indigo-500 text-indigo-400"
@@ -372,9 +363,10 @@ export default function MegaTab({ account, fills, history, transfers }: MegaTabP
                 </table>
               </div>
             )}
-          </Card>
-        </div>
-      </div>
+          </div>
+        )}
+      </Card>
+    </div>
 
       {/* ---- EQUITY & DRAWDOWN CHARTS ---- */}
       {equitySeries.length > 1 && (
