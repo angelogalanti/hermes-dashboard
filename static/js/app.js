@@ -87,7 +87,7 @@
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
 
-        renderKanbanBoard(data.kanban || []);
+        renderKanbanBoard(data.kanban || [], data.profiles || []);
         renderProfiles(data.profiles || []);
         renderSkillListByProfile(data.profiles || []);
         renderSkillMatrixShared(data.profiles || []);
@@ -102,6 +102,28 @@
           }
         } catch (bundleErr) {
           console.error('Failed to load skill bundles:', bundleErr);
+        }
+
+        // Fetch and render API credits badge
+        try {
+          const creditResp = await fetch('/api/credits');
+          if (creditResp.ok) {
+            const creditData = await creditResp.json();
+            renderCredits(creditData);
+          }
+        } catch (creditErr) {
+          console.error('Failed to load credits:', creditErr);
+        }
+
+        // Fetch and render OpenCode usage
+        try {
+          const ocResp = await fetch('/api/opencode-usage');
+          if (ocResp.ok) {
+            const ocData = await ocResp.json();
+            renderOpenCodeUsage(ocData);
+          }
+        } catch (ocErr) {
+          console.error('Failed to load OpenCode usage:', ocErr);
         }
 
         const now = new Date();
@@ -137,6 +159,133 @@
         healthBtn.disabled = false;
         healthBtn.classList.remove('loading');
       }
+    }
+
+    // ── Render API credits badge ──────────────────────────────
+    function renderCredits(data) {
+      const badge = document.getElementById('credits-badge');
+      if (!badge) return;
+
+      if (!data || !data.services) {
+        badge.innerHTML = '';
+        badge.className = 'credits-badge';
+        return;
+      }
+
+      const services = data.services;
+      let parts = [];
+
+      // Tavily
+      const tavily = services.tavily || {};
+      if (tavily.status === 'ok' && tavily.percentage !== null && tavily.percentage !== undefined) {
+        let dotClass, dotChar;
+        const pct = tavily.percentage;
+        if (pct < 60)       { dotClass = 'green';  dotChar = '\u{1F7E2}'; }  // 🟢
+        else if (pct < 80)  { dotClass = 'yellow'; dotChar = '\u{1F7E1}'; }  // 🟡
+        else if (pct < 95)  { dotClass = 'orange'; dotChar = '\u{1F7E0}'; }  // 🟠
+        else                { dotClass = 'red';    dotChar = '\u{1F534}'; }  // 🔴
+
+        parts.push(
+          '<span class="credit-service">' +
+          '<span class="credit-dot ' + dotClass + '">' + dotChar + '</span>' +
+          'Tavily ' + pct + '%' +
+          '</span>'
+        );
+
+        // Orange border when Tavily > 80%
+        badge.classList.toggle('warning', pct > 80);
+      } else if (tavily.status === 'unconfigured') {
+        parts.push(
+          '<span class="credit-service" style="color:#484f58;">' +
+          '<span class="credit-dot grey">\u{2B1B}</span>' +
+          'Tavily \u2014' +
+          '</span>'
+        );
+      } else {
+        // error / unauthorized
+        parts.push(
+          '<span class="credit-service" style="color:#484f58;">' +
+          '<span class="credit-dot grey">\u{2B1B}</span>' +
+          'Tavily err' +
+          '</span>'
+        );
+      }
+
+      // Exa
+      const exa = services.exa || {};
+      if (exa.status === 'ok') {
+        parts.push(
+          '<span class="credit-service">' +
+          '<span class="credit-dot green">\u{1F7E2}</span>' +
+          'Exa' +
+          '</span>'
+        );
+      } else {
+        // unconfigured, unauthorized, error → grey square
+        parts.push(
+          '<span class="credit-service" style="color:#484f58;">' +
+          '<span class="credit-dot grey">\u{2B1B}</span>' +
+          'Exa' +
+          '</span>'
+        );
+      }
+
+      badge.innerHTML = parts.join('<span class="credit-sep">\u{25FB}</span>');
+    }
+
+    // ── Render OpenCode Usage widget ───────────────────────────
+    function renderOpenCodeUsage(data) {
+      const container = document.getElementById('opencode-usage');
+      if (!container) return;
+
+      if (!data || !data.accounts || !data.accounts.length) {
+        container.innerHTML = '<span class="opencode-error"><i class="fa-regular fa-circle-question"></i> OpenCode usage non disponibile</span>';
+        return;
+      }
+
+      container.innerHTML = '';
+
+      data.accounts.forEach(acc => {
+        const section = document.createElement('div');
+        section.className = 'oc-account';
+
+        // Account header
+        const heading = document.createElement('h3');
+        heading.innerHTML = '<i class="fa-solid fa-bolt"></i> ' + esc(acc.name);
+        section.appendChild(heading);
+
+        // Cards container
+        const cardsWrap = document.createElement('div');
+        cardsWrap.className = 'oc-cards';
+
+        const windows = acc.windows || {};
+        const windowOrder = ['Rolling Usage', 'Weekly Usage', 'Monthly Usage'];
+        windowOrder.forEach(key => {
+          const w = windows[key];
+          if (!w) return;
+
+          const pct = w.pct || 0;
+          const pctInt = Math.round(pct);
+
+          // Color class based on percentage
+          let level = 'low';
+          if (pct >= 95)      level = 'critical';
+          else if (pct >= 80) level = 'high';
+          else if (pct >= 60) level = 'medium';
+
+          const card = document.createElement('div');
+          card.className = 'oc-card';
+          card.innerHTML =
+            '<div class="oc-card-label">' + esc(key) + '</div>' +
+            '<div class="oc-card-pct ' + level + '">' + pctInt + '%</div>' +
+            '<div class="oc-bar"><div class="oc-bar-fill ' + level + '" style="width:' + pctInt + '%"></div></div>' +
+            '<div class="oc-card-reset"><i class="fa-regular fa-clock"></i> ' + esc(w.resets_in || '—') + '</div>';
+          cardsWrap.appendChild(card);
+        });
+
+        section.appendChild(cardsWrap);
+        container.appendChild(section);
+      });
     }
 
     // ── Sort profiles: default → ceo → gateway running (by name) → others (by name) ──
@@ -268,7 +417,7 @@
     }
 
     // ── Render Kanban Board ──────────────────────────────────────
-    function renderKanbanBoard(tasks) {
+    function renderKanbanBoard(tasks, profiles) {
       // Group tasks by status
       const groups = {};
       COLUMNS.forEach(c => { groups[c.id] = []; });
@@ -320,6 +469,62 @@
           if (col.id === 'blocked') {
             archiveBtn = '<button class="kanban-card-archive" title="Archivia task" onclick="archiveTask(\'' + esc(t.id) + '\', event)"><i class="fa-solid fa-box-archive"></i></button>';
           }
+
+          // Heartbeat indicator (solo per task running o blocked)
+          let hbHtml = '';
+          let hbNoteHtml = '';
+          if (t.status === 'running' || t.status === 'blocked') {
+            const hbClass = getHeartbeatClass(t.last_heartbeat_at);
+            hbHtml = '<span class="kanban-card-heartbeat ' + hbClass + '">' +
+              '<i class="fa-solid fa-circle"></i> ' +
+              formatHeartbeat(t.last_heartbeat_at) +
+              '</span>';
+            if (t.last_heartbeat_note) {
+              hbNoteHtml = '<div class="kanban-card-hb-note" title="' + esc(t.last_heartbeat_note) + '">' +
+                '<i class="fa-solid fa-comment"></i> ' + esc(t.last_heartbeat_note) +
+                '</div>';
+            }
+          }
+
+          // Model badge
+          let modelHtml = '';
+          const model = t.model_override || getProfileModel(t.assignee, profiles);
+          if (model) {
+            modelHtml = '<span class="kanban-card-model">' +
+              '<i class="fa-solid fa-microchip"></i> ' + esc(model) +
+              '</span>';
+          }
+
+          // Heartbeat count
+          let hbCountHtml = '';
+          if (t.heartbeat_count && t.heartbeat_count > 0) {
+            hbCountHtml = '<span class="kanban-card-hbcount">' +
+              '<i class="fa-solid fa-heart-pulse"></i> ' + t.heartbeat_count +
+              '</span>';
+          }
+
+          // Elapsed time indicator (running / blocked)
+          let elapsedHtml = '';
+          if ((t.status === 'running' || t.status === 'blocked') && t.started_at) {
+            elapsedHtml = '<span class="kanban-card-elapsed">' +
+              '<i class="fa-regular fa-clock"></i> ' + formatElapsed(t.started_at) +
+              '</span>';
+          }
+
+          // OpenCode badge
+          let ocHtml = '';
+          if (t.used_opencode === true || t.used_opencode === 'true') {
+            ocHtml = '<span class="kanban-card-oc"><i class="fa-solid fa-bolt"></i> opencode</span>';
+          } else if (t.used_opencode === false || t.used_opencode === 'false') {
+            ocHtml = '<span class="kanban-card-oc no-oc"><i class="fa-solid fa-pen"></i> direct</span>';
+          }
+
+          card.style.cursor = 'pointer';
+          card.addEventListener('click', function(e) {
+            if (e.target.closest('.kanban-card-archive') || e.target.closest('button')) return;
+            openHeartbeatModal(t.id);
+          });
+
           card.innerHTML =
             archiveBtn +
             '<div class="kanban-card-title">' + esc(t.title) + '</div>' +
@@ -328,10 +533,49 @@
             '<span class="kanban-card-assignee">' +
             '<i class="fa-solid fa-user"></i> ' + esc(t.assignee || '-') +
             '</span>' +
-            '</div>';
+            '</div>' +
+            '<div class="kanban-card-footer">' +
+            hbHtml +
+            elapsedHtml +
+            modelHtml +
+            ocHtml +
+            hbCountHtml +
+            '</div>' +
+            hbNoteHtml;
           cardsEl.appendChild(card);
         });
       });
+    }
+
+    // ── Heartbeat helpers ────────────────────────────────────────────
+    function getHeartbeatClass(lastHb) {
+      if (!lastHb) return 'stale';
+      const diff = (Date.now() - lastHb * 1000) / 1000;
+      if (diff < 120) return 'alive';
+      if (diff < 300) return 'slow';
+      return 'stale';
+    }
+
+    function formatHeartbeat(lastHb) {
+      if (!lastHb) return 'nessun heartbeat';
+      const ago = timeAgo(new Date(lastHb * 1000).toISOString());
+      return 'heartbeat ' + ago;
+    }
+
+    function getProfileModel(assignee, profiles) {
+      if (!assignee || !profiles) return null;
+      const p = profiles.find(p => p.name === assignee);
+      return p ? (p.model || null) : null;
+    }
+
+    // ── Elapsed time helper ─────────────────────────────────────
+    function formatElapsed(unixTs) {
+      if (!unixTs) return '';
+      const diff = Math.floor(Date.now() / 1000 - unixTs);
+      if (diff < 60) return 'ora';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+      return Math.floor(diff / 86400) + 'g';
     }
 
     // ── Archive task ────────────────────────────────────────────
@@ -346,6 +590,47 @@
         await refresh();
       } catch (err) {
         console.error('Errore archiviazione task:', err);
+      }
+    }
+
+    // ── Delete skill ────────────────────────────────────────────
+    async function deleteSkill(profileName, skillName, category, skillType, event) {
+      if (skillType && typeof skillType === 'object') {
+        event = skillType;
+        skillType = 'local';
+      }
+      skillType = skillType || 'local';
+      if (event) event.stopPropagation();
+      if (!confirm('Cancellare la skill "' + skillName + '"?' +
+        (skillType !== 'local' ? '\n\n⚠️ Skill ' + skillType + ' — visibile a TUTTI i profili.' : ''))) return;
+      
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+      
+      var body = {name: skillName, type: skillType};
+      if (category) {
+        body.category = category;
+      }
+      
+      try {
+        const resp = await fetch('/api/skills/' + encodeURIComponent(profileName || 'default') + '/delete', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (!data.deleted) {
+          alert('Errore: ' + (data.error || 'cancellazione fallita'));
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+          return;
+        }
+        await refresh();
+      } catch (err) {
+        alert('Errore: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
       }
     }
 
@@ -396,8 +681,12 @@
 
             const card = document.createElement('div');
             card.className = 'skill-card';
-            card.style.cssText = 'background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px;display:flex;flex-direction:column;gap:4px;cursor:pointer;';
+            card.style.cssText = 'background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px;display:flex;flex-direction:column;gap:4px;cursor:pointer;position:relative;';
             card.innerHTML =
+              '<button class="skill-card-delete" title="Cancella skill" ' +
+              'onclick="event.stopPropagation(); deleteSkill(\'' + esc(p.name) + '\', \'' + esc(sk.name) + '\', \'' + esc(sk.category || '') + '\', \'local\', event)">' +
+              '<i class="fa-solid fa-trash-can"></i>' +
+              '</button>' +
               '<div style="display:flex;align-items:center;gap:8px;">' +
               '<i class="fa-solid fa-puzzle-piece" style="color:#d2a8ff;font-size:13px;"></i>' +
               '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + esc(sk.name) + '</span>' +
@@ -467,8 +756,11 @@
 
         const card = document.createElement('div');
         card.className = 'skill-card';
-        card.style.cssText = 'background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px;display:flex;flex-direction:column;gap:4px;cursor:pointer;';
+        card.style.cssText = 'background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px;display:flex;flex-direction:column;gap:4px;cursor:pointer;position:relative;';
         card.innerHTML =
+          '<button class="skill-card-delete" title="Cancella skill" onclick="event.stopPropagation(); deleteSkill(\'\', \'' + esc(sk.name) + '\', \'' + esc(sk.category || '') + '\', \'shared\', event)">' +
+          '<i class="fa-solid fa-trash-can"></i>' +
+          '</button>' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
           '<i class="fa-solid fa-puzzle-piece" style="color:#d2a8ff;font-size:13px;"></i>' +
           '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + esc(sk.name) + '</span>' +
@@ -519,8 +811,11 @@
 
         const card = document.createElement('div');
         card.className = 'skill-card';
-        card.style.cssText = 'background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px;display:flex;flex-direction:column;gap:4px;cursor:pointer;';
+        card.style.cssText = 'background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px;display:flex;flex-direction:column;gap:4px;cursor:pointer;position:relative;';
         card.innerHTML =
+          '<button class="skill-card-delete" title="Cancella skill" onclick="event.stopPropagation(); deleteSkill(\'\', \'' + esc(sk.name) + '\', \'' + esc(sk.category || '') + '\', \'primary\', event)">' +
+          '<i class="fa-solid fa-trash-can"></i>' +
+          '</button>' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
           '<i class="fa-solid fa-crown" style="color:#d29922;font-size:13px;"></i>' +
           '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + esc(sk.name) + '</span>' +
@@ -777,11 +1072,72 @@
       overlay.classList.remove("open");
     }
 
+    // ── Heartbeat Modal ─────────────────────────────────────────
+    async function openHeartbeatModal(taskId) {
+      const overlay = document.getElementById('heartbeat-modal');
+      if (!overlay) return;
+
+      document.getElementById('heartbeat-modal-title').textContent =
+        'Heartbeat \u2014 ' + shortId(taskId);
+      document.getElementById('heartbeat-modal-content').innerHTML =
+        '<div class="loading-spinner"><i class="fa-solid fa-spinner fa-spin"></i> Caricamento...</div>';
+      overlay.classList.add('open');
+
+      try {
+        const resp = await fetch('/api/kanban/' + encodeURIComponent(taskId) + '/heartbeats');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+
+        if (!data.heartbeats || data.heartbeats.length === 0) {
+          document.getElementById('heartbeat-modal-content').innerHTML =
+            '<div class="empty-state"><i class="fa-solid fa-heart-circle-minus"></i> Nessun heartbeat registrato</div>';
+          return;
+        }
+
+        let html = '<div class="hb-summary">' +
+          '<span><i class="fa-solid fa-heart-pulse" style="color:#f85149;"></i> ' + data.total + ' heartbeat totali</span>' +
+          '</div>';
+
+        html += '<div class="hb-timeline">';
+        data.heartbeats.forEach(h => {
+          const d = new Date(h.created_at * 1000);
+          const timeStr = d.toLocaleTimeString('it-IT');
+          const dateStr = d.toLocaleDateString('it-IT');
+          const note = h.note ? esc(h.note) : '<span class="hb-note-none">(nessuna nota)</span>';
+          const runBadge = h.run_id ? '<span class="hb-run-badge">Run #' + h.run_id + '</span>' : '';
+          html += '<div class="hb-timeline-item">' +
+            '<div class="hb-timeline-dot"></div>' +
+            '<div class="hb-timeline-content">' +
+            '<div class="hb-timeline-header">' +
+            '<span class="hb-timeline-time">' + dateStr + ' ' + timeStr + '</span>' +
+            runBadge +
+            '</div>' +
+            '<div class="hb-timeline-note">' + note + '</div>' +
+            '</div>' +
+            '</div>';
+        });
+        html += '</div>';
+
+        document.getElementById('heartbeat-modal-content').innerHTML = html;
+      } catch (err) {
+        document.getElementById('heartbeat-modal-content').innerHTML =
+          '<div class="error-state"><i class="fa-solid fa-triangle-exclamation"></i> Errore: ' + esc(err.message) + '</div>';
+      }
+    }
+
+    function closeHeartbeatModal(event) {
+      const overlay = document.getElementById('heartbeat-modal');
+      if (!overlay) return;
+      if (event && event.target !== overlay) return;
+      overlay.classList.remove('open');
+    }
+
     // Close modal on ESC
     document.addEventListener("keydown", function(e) {
       if (e.key === "Escape") {
         closeSkillModal();
         closeSoulModal();
+        closeHeartbeatModal();
       }
     });
 

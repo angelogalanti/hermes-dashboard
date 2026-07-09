@@ -5,41 +5,25 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-PID_FILE=".dashboard.pid"
 
-if [ -f "$PID_FILE" ]; then
-    PID=$(cat "$PID_FILE")
-    if kill -0 "$PID" 2>/dev/null; then
-        echo "[stop] Fermo processo PID $PID ..."
-        kill "$PID"
-        # Attende fino a 5 secondi che termini
-        for _ in $(seq 1 5); do
-            if ! kill -0 "$PID" 2>/dev/null; then
-                break
-            fi
-            sleep 1
-        done
-        # Se ancora vivo, forza kill
-        if kill -0 "$PID" 2>/dev/null; then
-            echo "[stop] Processo non risponde, kill -9 ..."
-            kill -9 "$PID" 2>/dev/null || true
-        fi
-    else
-        echo "[stop] Nessun processo con PID $PID in esecuzione."
-    fi
-    rm -f "$PID_FILE"
-else
-    echo "[stop] Nessun PID file trovato. Cerco processo 'app.py' in esecuzione..."
-    PIDS=$(pgrep -f "python.*app\.py" || true)
-    if [ -n "$PIDS" ]; then
-        echo "[stop] Trovati PID: $PIDS — li termino tutti."
-        # shellcheck disable=SC2086
-        kill $PIDS 2>/dev/null || true
-        sleep 1
-        # shellcheck disable=SC2086
-        kill -9 $PIDS 2>/dev/null || true
-        echo "[stop] Fatto."
-    else
-        echo "[stop] Nessun processo dashboard trovato."
-    fi
+PORT=5151
+
+# Metodo 1: kill per socket (sempre preciso)
+echo "[stop] Termino processo sulla porta $PORT (fuser)..."
+fuser -k "${PORT}/tcp" 2>/dev/null || true
+sleep 1
+
+# Se ancora vivo, forza kill
+fuser -k -KILL "${PORT}/tcp" 2>/dev/null || true
+
+# Metodo 2: kill per nome processo (fallback)
+REMAINING=$(pgrep -f 'python.*app\.py' 2>/dev/null || true)
+if [ -n "$REMAINING" ]; then
+    echo "[stop] Ancora in esecuzione: $REMAINING — kill forzato..."
+    # shellcheck disable=SC2086
+    kill -9 $REMAINING 2>/dev/null || true
 fi
+
+# Pulisce PID file se ancora presente
+rm -f .dashboard.pid
+echo "[stop] Fatto."

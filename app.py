@@ -6,13 +6,16 @@ Exposes GET /api/status with profiles and kanban data.
 
 import json
 import os
+import shutil
 import sqlite3
 from pathlib import Path
 
 import yaml
 from flask import Flask, jsonify, request
 
+import credit_check
 import health_check
+import opencode_usage_scraper
 
 app = Flask(__name__)
 
@@ -21,6 +24,12 @@ KANBAN_DB = Path.home() / '.hermes' / 'kanban.db'
 SHARED_SKILLS_DIR = Path.home() / '.hermes' / 'skills-shared'
 PRIMARY_SKILLS_DIR = Path.home() / '.hermes' / 'skills-primary'
 GLOBAL_SKILLS_DIR = Path.home() / '.hermes' / 'skills'
+
+SKILL_BASES = {
+    'local':   PROFILES_DIR,
+    'shared':  SHARED_SKILLS_DIR,
+    'primary': PRIMARY_SKILLS_DIR,
+}
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -45,28 +54,33 @@ def add_cors_headers(response):
 
 
 # ── Helpers per skill ──────────────────────────────────────────────
-def _scan_skills_dir(scan_dir: Path) -> tuple[set[str], set[str]]:
+def _scan_skills_dir(scan_dir: Path) -> tuple[set[str], set[str], dict[str, str]]:
     """Scan a directory for SKILL.md files.
 
-    Returns (set of skill names, set of categories).
+    Returns (set of skill names, set of categories, dict of skill_name → category).
     Handles both flat (<skill>/SKILL.md) and categorized (<cat>/<skill>/SKILL.md) layouts.
+    For flat skills the dict maps to None; for categorized skills it maps to the category name.
     """
     names: set[str] = set()
     categories: set[str] = set()
+    name_to_cat: dict[str, str] = {}
     if not scan_dir.is_dir():
-        return names, categories
+        return names, categories, name_to_cat
     for sf in sorted(scan_dir.rglob('SKILL.md')):
         rel = sf.relative_to(scan_dir)
         parts = rel.parts
         if len(parts) == 2:
             # <skill-name>/SKILL.md — flat
             names.add(parts[0])
+            if parts[0] not in name_to_cat:
+                name_to_cat[parts[0]] = ''
         elif len(parts) == 3:
             # <category>/<skill-name>/SKILL.md
             categories.add(parts[0])
             names.add(parts[1])
+            name_to_cat[parts[1]] = parts[0]
         # Longer paths (deeper subdirs) are references/scripts — ignore
-    return names, categories
+    return names, categories, name_to_cat
 
 
 def _load_skill_descriptions(scan_dir: Path) -> dict[str, str]:
@@ -115,6 +129,9 @@ def _build_skill_lists(
     primary_categories: set[str] | None = None,
     usage: dict | None = None,
     descriptions: dict[str, str] | None = None,
+    local_cat_map: dict[str, str] | None = None,
+    shared_cat_map: dict[str, str] | None = None,
+    primary_cat_map: dict[str, str] | None = None,
 ) -> dict:
     """Build the full skill response dict with local/shared/primary split + legacy fields.
 
@@ -133,6 +150,12 @@ def _build_skill_lists(
         usage = {}
     if descriptions is None:
         descriptions = {}
+    if local_cat_map is None:
+        local_cat_map = {}
+    if shared_cat_map is None:
+        shared_cat_map = {}
+    if primary_cat_map is None:
+        primary_cat_map = {}
 
     # Primary takes precedence over shared (but local still highest)
     # First subtract local from shared/primary, then primary from shared
@@ -190,14 +213,22 @@ def _build_skill_lists(
     # ── Second pass: skills from directory scan (never used — use_count=0) ──
     for skill_name in sorted(local_names):
         if skill_name not in local_skills:
-            local_skills[skill_name] = _build_skill_obj(skill_name, None, None)
+            local_skills[skill_name] = _build_skill_obj(skill_name, None, local_cat_map.get(skill_name))
     if primary_names:
         for skill_name in sorted(primary_names):
             if skill_name not in primary_skills:
-                primary_skills[skill_name] = _build_skill_obj(skill_name, None, None)
+                primary_skills[skill_name] = _build_skill_obj(skill_name, None, primary_cat_map.get(skill_name))
     for skill_name in sorted(shared_names):
         if skill_name not in shared_skills:
-            shared_skills[skill_name] = _build_skill_obj(skill_name, None, None)
+            shared_skills[skill_name] = _build_skill_obj(skill_name, None, shared_cat_map.get(skill_name))
+
+    # ── Third pass: fill missing categories from directory scan maps ──
+    # Skills with usage data may have flat keys (no category prefix) even when
+    # they live in a category subdirectory. Override category from scan maps.
+    for sk_map, target in [(local_cat_map, local_skills), (primary_cat_map, primary_skills), (shared_cat_map, shared_skills)]:
+        for skill_name, cat in sk_map.items():
+            if cat and skill_name in target and not target[skill_name].get('category'):
+                target[skill_name]['category'] = cat
 
     # ── Sort all lists ──
     local_sorted = sorted(local_skills.values(), key=lambda s: s['use_count'], reverse=True)
@@ -285,7 +316,7 @@ def _load_profile_skills(name: str) -> dict | None:
     desc_primary: dict[str, str] = {}
 
     # Scansiona directory locali
-    local_names, local_categories = _scan_skills_dir(skills_dir)
+    local_names, local_categories, local_cat_map = _scan_skills_dir(skills_dir)
     desc_local = _load_skill_descriptions(skills_dir)
 
     # Separa directory primarie da quelle condivise
@@ -301,20 +332,26 @@ def _load_profile_skills(name: str) -> dict | None:
     # Scansiona directory condivise (non-primary)
     shared_names: set[str] = set()
     shared_categories: set[str] = set()
+    shared_cat_map: dict[str, str] = {}
     for ext_dir in shared_dirs:
-        sn, sc = _scan_skills_dir(ext_dir)
+        sn, sc, scm = _scan_skills_dir(ext_dir)
         shared_names |= sn
         shared_categories |= sc
+        for k, v in scm.items():
+            shared_cat_map[k] = v
         for k, v in _load_skill_descriptions(ext_dir).items():
             desc_shared[k] = v
 
     # Scansiona directory primarie
     primary_names: set[str] = set()
     primary_categories: set[str] = set()
+    primary_cat_map: dict[str, str] = {}
     for prim_dir in primary_dirs:
-        sn, sc = _scan_skills_dir(prim_dir)
+        sn, sc, scm = _scan_skills_dir(prim_dir)
         primary_names |= sn
         primary_categories |= sc
+        for k, v in scm.items():
+            primary_cat_map[k] = v
         for k, v in _load_skill_descriptions(prim_dir).items():
             desc_primary[k] = v
 
@@ -328,6 +365,7 @@ def _load_profile_skills(name: str) -> dict | None:
         local_names, shared_names, primary_names,
         local_categories, shared_categories, primary_categories,
         usage, merged_desc,
+        local_cat_map, shared_cat_map, primary_cat_map,
     )
 
 
@@ -411,9 +449,9 @@ def _load_default_profile() -> dict | None:
     # Skill locali da ~/.hermes/skills/ (globali)
     # Skill condivise da ~/.hermes/skills-shared/
     # Skill primarie da ~/.hermes/skills-primary/
-    local_names, local_categories = _scan_skills_dir(GLOBAL_SKILLS_DIR)
-    shared_names, shared_categories = _scan_skills_dir(SHARED_SKILLS_DIR)
-    primary_names, primary_categories = _scan_skills_dir(PRIMARY_SKILLS_DIR)
+    local_names, local_categories, local_cat_map = _scan_skills_dir(GLOBAL_SKILLS_DIR)
+    shared_names, shared_categories, shared_cat_map = _scan_skills_dir(SHARED_SKILLS_DIR)
+    primary_names, primary_categories, primary_cat_map = _scan_skills_dir(PRIMARY_SKILLS_DIR)
 
     # Carica descrizioni skill
     desc_local = _load_skill_descriptions(GLOBAL_SKILLS_DIR)
@@ -431,7 +469,7 @@ def _load_default_profile() -> dict | None:
         with open(usage_path) as f:
             usage = json.load(f)
 
-    skills = _build_skill_lists(local_names, shared_names, primary_names, local_categories, shared_categories, primary_categories, usage, merged_desc)
+    skills = _build_skill_lists(local_names, shared_names, primary_names, local_categories, shared_categories, primary_categories, usage, merged_desc, local_cat_map, shared_cat_map, primary_cat_map)
 
     # Legge gateway_state.json della root (default profile gateway)
     gateway = 'unknown'
@@ -497,13 +535,60 @@ def load_kanban() -> list[dict]:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         cur.execute(
-            'SELECT id, title, status, assignee '
+            'SELECT id, title, status, assignee, '
+            '  last_heartbeat_at, model_override, '
+            '  created_at, started_at, priority, current_run_id '
             'FROM tasks WHERE status != ? ORDER BY created_at DESC',
             ('archived',)
         )
         rows = cur.fetchall()
+        tasks = []
+        for r in rows:
+            t = dict(r)
+            cur.execute(
+                'SELECT COUNT(*) as cnt FROM task_events '
+                'WHERE task_id=? AND kind=?',
+                (t['id'], 'heartbeat')
+            )
+            t['heartbeat_count'] = cur.fetchone()['cnt']
+
+            # Leggi l'ultima nota heartbeat dal payload dell'evento più recente
+            cur.execute(
+                'SELECT payload FROM task_events '
+                'WHERE task_id=? AND kind=? '
+                'ORDER BY created_at DESC LIMIT 1',
+                (t['id'], 'heartbeat')
+            )
+            hb_row = cur.fetchone()
+            if hb_row and hb_row['payload']:
+                try:
+                    payload = json.loads(hb_row['payload'])
+                    if isinstance(payload, dict) and 'note' in payload:
+                        note = payload['note']
+                        if note and isinstance(note, str) and note.strip():
+                            t['last_heartbeat_note'] = note.strip()
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            # Leggi used_opencode dal metadata dell'ultimo run completato
+            cur.execute(
+                'SELECT metadata FROM task_runs '
+                'WHERE task_id=? AND metadata IS NOT NULL AND metadata != "" '
+                'ORDER BY started_at DESC LIMIT 1',
+                (t['id'],)
+            )
+            run_row = cur.fetchone()
+            if run_row:
+                try:
+                    meta = json.loads(run_row['metadata'])
+                    if isinstance(meta, dict) and 'used_opencode' in meta:
+                        t['used_opencode'] = meta['used_opencode']
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            tasks.append(t)
         conn.close()
-        return [dict(r) for r in rows]
+        return tasks
     except sqlite3.Error:
         return []
 
@@ -540,6 +625,15 @@ def api_health():
     return jsonify(health_check.run(force=force))
 
 
+@app.route('/api/credits')
+def api_credits():
+    """GET /api/credits → JSON con crediti API Tavily/Exa.
+       GET /api/credits?force=1 → ignora cache, rifà le chiamate.
+    """
+    force = request.args.get('force', '').lower() in ('1', 'true')
+    return jsonify(credit_check.run(force=force))
+
+
 @app.route('/api/profile/<name>/soul')
 def api_profile_soul(name):
     """GET /api/profile/<name>/soul - JSON with SOUL.md content."""
@@ -570,6 +664,85 @@ def api_profile_agents(name):
         except OSError:
             return jsonify({"exists": False})
     return jsonify({"exists": False})
+
+
+@app.route('/api/skills/<profile_name>/delete', methods=['POST'])
+def api_skill_delete(profile_name):
+    """POST /api/skills/<profile_name>/delete
+    Body JSON: {"name": "skill-name", "type": "local|shared|primary"}
+    Cancella la skill (locale, condivisa o primaria).
+    """
+    try:
+        data = request.get_json(force=True)
+    except Exception:
+        return jsonify({'deleted': False, 'error': 'JSON richiesto'}), 400
+    
+    skill_name = data.get('name') if isinstance(data, dict) else None
+    category = data.get('category', '').strip() if isinstance(data, dict) else ''
+    skill_type = data.get('type', 'local') if isinstance(data, dict) else 'local'
+
+    if not skill_name or not isinstance(skill_name, str) or not skill_name.strip():
+        return jsonify({'deleted': False, 'error': 'Campo "name" mancante o non valido'}), 400
+
+    if skill_type not in SKILL_BASES:
+        return jsonify({'deleted': False, 'error': f'Tipo skill non valido: {skill_type}'}), 400
+
+    skill_name = skill_name.strip()
+
+    if skill_type == 'local':
+        base_dir = PROFILES_DIR / profile_name / 'skills'
+    else:
+        base_dir = SKILL_BASES[skill_type]
+
+    if category:
+        skill_dir = base_dir / category / skill_name
+        if not skill_dir.is_dir():
+            skill_dir = base_dir / skill_name
+    else:
+        skill_dir = base_dir / skill_name
+
+    if not skill_dir.is_dir():
+        return jsonify({
+            'deleted': False,
+            'error': f'Skill "{skill_name}" non trovata in {base_dir}',
+        }), 404
+
+    try:
+        shutil.rmtree(str(skill_dir))
+    except OSError as e:
+        return jsonify({'deleted': False, 'error': f'Errore cancellazione: {e}'}), 500
+
+    if skill_type == 'local':
+        usage_path = PROFILES_DIR / profile_name / 'skills' / '.usage.json'
+        if usage_path.is_file():
+            try:
+                with open(usage_path) as f:
+                    usage = json.load(f)
+                if skill_name in usage:
+                    del usage[skill_name]
+                for key in list(usage.keys()):
+                    if key.endswith('/' + skill_name) or key == skill_name:
+                        del usage[key]
+                with open(usage_path, 'w') as f:
+                    json.dump(usage, f, indent=2)
+            except (OSError, json.JSONDecodeError):
+                pass
+
+    return jsonify({
+        'deleted': True,
+        'type': skill_type,
+        'skill': skill_name,
+        'path': str(skill_dir),
+    })
+
+
+@app.route('/api/opencode-usage')
+def api_opencode_usage():
+    """GET /api/opencode-usage → JSON con usage OpenCode (2 account).
+       GET /api/opencode-usage?force=1 → ignora cache.
+    """
+    force = request.args.get('force', '').lower() in ('1', 'true')
+    return jsonify(opencode_usage_scraper.run(force=force))
 
 
 @app.route('/')
@@ -623,6 +796,55 @@ def api_kanban_archive(task_id):
         return jsonify({'archived': True, 'task_id': task_id})
     except sqlite3.Error as e:
         return jsonify({'archived': False, 'task_id': task_id, 'error': str(e)}), 500
+
+
+@app.route('/api/kanban/<task_id>/heartbeats')
+def api_kanban_heartbeats(task_id):
+    """GET /api/kanban/<task_id>/heartbeats → heartbeat events di un task."""
+    try:
+        conn = sqlite3.connect(str(KANBAN_DB))
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        cur.execute(
+            'SELECT COUNT(*) as cnt FROM task_events '
+            'WHERE task_id=? AND kind=?',
+            (task_id, 'heartbeat')
+        )
+        total = cur.fetchone()['cnt']
+
+        cur.execute(
+            'SELECT id, run_id, payload, created_at '
+            'FROM task_events '
+            'WHERE task_id=? AND kind=? '
+            'ORDER BY created_at DESC',
+            (task_id, 'heartbeat')
+        )
+        rows = cur.fetchall()
+        conn.close()
+
+        heartbeats = []
+        for r in rows:
+            note = None
+            try:
+                payload = json.loads(r['payload'])
+                note = payload.get('note') if isinstance(payload, dict) else None
+            except (json.JSONDecodeError, TypeError):
+                pass
+            heartbeats.append({
+                'id': r['id'],
+                'run_id': r['run_id'],
+                'note': note,
+                'created_at': r['created_at'],
+            })
+
+        return jsonify({
+            'task_id': task_id,
+            'total': total,
+            'heartbeats': heartbeats,
+        })
+    except sqlite3.Error as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ── Main ───────────────────────────────────────────────────────────

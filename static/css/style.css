@@ -78,6 +78,42 @@
       font-size: 12px;
       color: #8b949e;
     }
+
+    /* ── Credits badge ─────────────── */
+    .credits-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #8b949e;
+      padding: 4px 10px;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      background: #161b22;
+      transition: border-color 0.2s;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .credits-badge.warning {
+      border-color: #d29922;
+    }
+    .credits-badge .credit-service {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .credits-badge .credit-dot {
+      font-size: 10px;
+    }
+    .credits-badge .credit-dot.green { color: #3fb950; }
+    .credits-badge .credit-dot.yellow { color: #d29922; }
+    .credits-badge .credit-dot.orange { color: #f0883e; }
+    .credits-badge .credit-dot.red { color: #f85149; }
+    .credits-badge .credit-dot.grey { color: #484f58; }
+    .credits-badge .credit-sep {
+      color: #30363d;
+      font-size: 10px;
+    }
     .status-badge {
       display: inline-block;
       width: 10px; height: 10px;
@@ -312,11 +348,42 @@
       flex-direction: column;
       gap: 4px;
       cursor: pointer;
+      position: relative;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
     .skill-card:hover {
       border-color: #58a6ff;
       box-shadow: 0 0 0 1px rgba(88,166,255,0.3);
+    }
+    .skill-card-delete {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: none;
+      border: none;
+      color: #484f58;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 4px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s, background 0.15s;
+      z-index: 2;
+      line-height: 1;
+    }
+
+    .skill-card:hover .skill-card-delete {
+      opacity: 1;
+    }
+
+    .skill-card-delete:hover {
+      color: #f85149;
+      background: rgba(248, 81, 73, 0.1);
+    }
+
+    .skill-card-delete:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
     }
 
     /* ── Modal overlay ───────────────── */
@@ -630,6 +697,56 @@
       color: #58a6ff;
     }
 
+    .kanban-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+      font-size: 11px;
+      gap: 6px;
+      min-height: 18px;
+    }
+
+    .kanban-card-heartbeat {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: #8b949e;
+    }
+    .kanban-card-heartbeat i { font-size: 8px; }
+    .kanban-card-heartbeat.alive i { color: #3fb950; }
+    .kanban-card-heartbeat.slow  i { color: #d29922; }
+    .kanban-card-heartbeat.stale i { color: #484f58; }
+
+    .kanban-card-model {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 10px;
+      color: #79c0ff;
+      background: rgba(121, 192, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: auto;
+    }
+    .kanban-card-model i { font-size: 9px; }
+
+    .kanban-card-oc {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      color: #2ea043;
+      background: rgba(46, 160, 67, 0.1);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .kanban-card-oc i { font-size: 9px; }
+    .kanban-card-oc.no-oc { color: #8b949e; background: rgba(139, 148, 158, 0.1); }
+
     .kanban-column-empty {
       text-align: center;
       padding: 24px 8px;
@@ -721,4 +838,245 @@
     .skill-bundle-card:hover {
       border-color: #3fb950;
       box-shadow: 0 0 0 1px rgba(63,185,80,0.3);
+    }
+
+    /* ── Heartbeat count badge on kanban card ── */
+    .kanban-card-hbcount {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: #f85149;
+      background: rgba(248,81,73,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .kanban-card-hbcount i { font-size: 8px; }
+
+    /* ── Elapsed time badge on kanban card ── */
+    .kanban-card-elapsed {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: #8b949e;
+      background: rgba(139, 148, 158, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+    .kanban-card-elapsed i { font-size: 9px; color: #484f58; }
+
+    /* ── Heartbeat note on kanban card ── */
+    .kanban-card-hb-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 5px;
+      margin-top: 4px;
+      padding: 4px 6px;
+      font-size: 11px;
+      line-height: 1.35;
+      color: #8b949e;
+      background: rgba(139, 148, 158, 0.06);
+      border-radius: 4px;
+      overflow: hidden;
+      max-height: 32px;
+    }
+    .kanban-card-hb-note i {
+      font-size: 9px;
+      color: #484f58;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* ── Heartbeat Modal ──────────────────── */
+    .skill-modal.heartbeat-modal {
+      max-width: 600px;
+      width: min(90%, 600px);
+    }
+    .heartbeat-modal-content {
+      margin-top: 16px;
+    }
+    .loading-spinner {
+      text-align: center;
+      padding: 40px 20px;
+      color: #8b949e;
+      font-size: 14px;
+    }
+    .loading-spinner i {
+      font-size: 24px;
+      margin-bottom: 10px;
+      display: block;
+    }
+
+    /* ── Heartbeat summary ────────────────── */
+    .hb-summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #c9d1d9;
+      margin-bottom: 16px;
+      padding: 10px 14px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+    }
+
+    /* ── Heartbeat timeline ───────────────── */
+    .hb-timeline {
+      position: relative;
+      padding-left: 24px;
+    }
+    .hb-timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: #30363d;
+    }
+    .hb-timeline-item {
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .hb-timeline-dot {
+      position: absolute;
+      left: -18px;
+      top: 4px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #f85149;
+      border: 2px solid #0d1117;
+      z-index: 1;
+    }
+    .hb-timeline-content {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 10px 14px;
+    }
+    .hb-timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .hb-timeline-time {
+      font-size: 12px;
+      color: #8b949e;
+      font-family: 'SF Mono','Fira Code','Consolas',monospace;
+    }
+    .hb-run-badge {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(88,166,255,0.12);
+      color: #58a6ff;
+      border: 1px solid rgba(88,166,255,0.25);
+    }
+    .hb-timeline-note {
+      font-size: 13px;
+      color: #c9d1d9;
+      line-height: 1.4;
+    }
+    .hb-note-none {
+      color: #484f58;
+      font-style: italic;
+    }
+
+    /* ── OpenCode Usage Widget ──────────── */
+    .opencode-section {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    .oc-account {
+      flex: 1;
+      min-width: 280px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .oc-account h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+    .oc-account h3 i {
+      color: #58a6ff;
+      margin-right: 6px;
+      font-size: 12px;
+    }
+    .oc-cards {
+      display: flex;
+      gap: 10px;
+    }
+    .oc-card {
+      flex: 1;
+      min-width: 0;
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .oc-card-label {
+      font-size: 11px;
+      color: #8b949e;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .oc-card-pct {
+      font-size: 22px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .oc-card-pct.low    { color: #3fb950; }
+    .oc-card-pct.medium { color: #d29922; }
+    .oc-card-pct.high   { color: #f0883e; }
+    .oc-card-pct.critical { color: #f85149; }
+    .oc-bar {
+      height: 6px;
+      background: #21262d;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .oc-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+    .oc-bar-fill.low    { background: #3fb950; }
+    .oc-bar-fill.medium { background: #d29922; }
+    .oc-bar-fill.high   { background: #f0883e; }
+    .oc-bar-fill.critical { background: #f85149; }
+    .oc-card-reset {
+      font-size: 11px;
+      color: #484f58;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .oc-card-reset i { font-size: 9px; }
+    .opencode-error {
+      font-size: 12px;
+      color: #8b949e;
+      font-style: italic;
+    }
+    .opencode-loading {
+      font-size: 12px;
+      color: #484f58;
     }

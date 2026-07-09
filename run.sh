@@ -36,12 +36,26 @@ echo "║   Premi Ctrl+C per fermare                   ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
 
-# Salva il PID per stop.sh
-echo $$ > .dashboard.pid
+# Avvia Flask in background e salva il PID reale
+# (non usiamo exec perche' systemd deve poter leggere il PID vero)
+python3 app.py "$@" &
+FLAKS_PID=$!
+echo "$FLAKS_PID" > .dashboard.pid
 
-# Se --no-reload, rimuovi debug=True
-if [ "${1:-}" = "--no-reload" ]; then
-    exec python3 app.py --no-reload
-else
-    exec python3 app.py
-fi
+# Forward dei segnali systemd (SIGTERM/SIGINT) a Flask
+cleanup() {
+    echo "[run] Ricevuto segnale, termino Flask (PID $FLAKS_PID)..."
+    kill "$FLAKS_PID" 2>/dev/null || true
+    wait "$FLAKS_PID" 2>/dev/null || true
+    rm -f .dashboard.pid
+    echo "[run] Flask terminato."
+}
+trap cleanup SIGTERM SIGINT
+
+# Resta in attesa — se Flask muore, lo script esce con il suo codice
+wait "$FLAKS_PID"
+FLAKS_EXIT=$?
+
+# Se Flask esce da solo (non per nostro segnale), pulisci PID file
+rm -f .dashboard.pid
+exit "$FLAKS_EXIT"

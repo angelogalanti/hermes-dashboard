@@ -12,6 +12,7 @@
     <header>
       <h1><i class="fas fa-robot"></i> Hermes Dashboard</h1>
       <p>Panoramica dei profili e stato dei task kanban</p>
+      <div id="opencode-usage" class="opencode-section"></div>
     </header>
 
     <div class="controls">
@@ -21,6 +22,7 @@
       <button id="health-btn" onclick="testHealth()">
         <i class="fa-solid fa-heart-pulse"></i> Testa health
       </button>
+      <span id="credits-badge" class="credits-badge"></span>
       <label class="triage-toggle" title="Mostra/nascondi colonna triage">
         <input type="checkbox" id="triage-check" onchange="toggleTriage()">
         <i class="fa-solid fa-filter"></i> Triage
@@ -57,6 +59,17 @@
       </div>
     </section>
 
+    <!-- Sezione Skill Bundles -->
+    <section id="skill-bundles-section">
+      <h2><i class="fa-solid fa-layer-group"></i> Skill Bundles</h2>
+      <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
+        <i class="fa-solid fa-link" style="color:#2ea043;"></i>
+        Raggruppamenti di skill sotto un unico slash command. Disponibili su tutti i profili,
+        caricano solo le skill presenti nel profilo corrente.
+      </p>
+      <div id="skill-bundles-content"></div>
+    </section>
+
     <!-- Sezione Skill Condivise (elenco) -->
     <section id="skill-shared-section">
       <h2><i class="fa-solid fa-share-nodes"></i> Skill Condivise</h2>
@@ -82,17 +95,6 @@
         Skill specifiche di ogni profilo, raggruppate per profilo ordinate per use_count.
       </p>
       <div id="skill-local-content"></div>
-    </section>
-
-    <!-- Sezione Skill Bundles -->
-    <section id="skill-bundles-section">
-      <h2><i class="fa-solid fa-layer-group"></i> Skill Bundles</h2>
-      <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
-        <i class="fa-solid fa-link" style="color:#2ea043;"></i>
-        Raggruppamenti di skill sotto un unico slash command. Disponibili su tutti i profili,
-        caricano solo le skill presenti nel profilo corrente.
-      </p>
-      <div id="skill-bundles-content"></div>
     </section>
   </div>
 
@@ -163,6 +165,18 @@
       <div class="skill-modal-name"><i class="fa-solid fa-scroll"></i> <span id="soul-modal-title"></span></div>
       <div class="skill-modal-category" id="soul-modal-subtitle"></div>
       <pre id="soul-modal-content" style="background:#161b22;border:1px solid #21262d;border-radius:6px;padding:16px;font-size:13px;color:#c9d1d9;white-space:pre-wrap;word-wrap:break-word;max-height:70vh;overflow-y:auto;font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;"></pre>
+    </div>
+  </div>
+
+  <!-- Heartbeat Modal -->
+  <div class="skill-modal-overlay" id="heartbeat-modal" onclick="closeHeartbeatModal(event)">
+    <div class="skill-modal heartbeat-modal" onclick="event.stopPropagation()">
+      <button class="skill-modal-close" onclick="closeHeartbeatModal()">&times;</button>
+      <div class="skill-modal-name">
+        <i class="fa-solid fa-heart-pulse" style="color:#f85149;"></i>
+        <span id="heartbeat-modal-title"></span>
+      </div>
+      <div id="heartbeat-modal-content" class="heartbeat-modal-content"></div>
     </div>
   </div>
 
