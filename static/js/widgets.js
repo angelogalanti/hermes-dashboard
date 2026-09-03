@@ -24,15 +24,25 @@
     }
 
     // ── Credits badge ────────────────────────────────────────────
+    // Ogni servizio è una pill omogenea: dot colorato + nome + valore.
+    // Nessun separatore: la spaziatura è via flex gap.
+    function creditPill(name, value, color) {
+      return '<span class="credit-service">' +
+        '<span class="status-dot" style="background:' + color + '"></span>' +
+        esc(name) + (value ? ' ' + esc(value) : '') +
+        '</span>';
+    }
+
     export function renderCredits(badge, data) {
       if (!badge) return;
       rememberTs(badge, data && data._ts);
 
       if (!data || !data.services) {
         badge.innerHTML = '';
-        badge.className = 'credits-badge';
+        badge.style.display = 'none';
         return;
       }
+      badge.style.display = '';
 
       const services = data.services;
       const parts = [];
@@ -41,54 +51,28 @@
       const tavily = services.tavily || {};
       if (tavily.status === 'ok' && tavily.percentage !== null && tavily.percentage !== undefined) {
         const pct = tavily.percentage;
-        let dotClass, dotChar;
-        if (pct < 60)       { dotClass = 'green';  dotChar = '\u{1F7E2}'; }
-        else if (pct < 80)  { dotClass = 'yellow'; dotChar = '\u{1F7E1}'; }
-        else if (pct < 95)  { dotClass = 'orange'; dotChar = '\u{1F7E0}'; }
-        else                { dotClass = 'red';    dotChar = '\u{1F534}'; }
-
-        parts.push(
-          '<span class="credit-service">' +
-          '<span class="credit-dot ' + dotClass + '">' + dotChar + '</span>' +
-          'Tavily ' + esc(String(pct)) + '%' +
-          '</span>'
-        );
+        let color;
+        if (pct < 60)      color = '#3fb950';
+        else if (pct < 80) color = '#d29922';
+        else if (pct < 95) color = '#f0883e';
+        else               color = '#f85149';
+        parts.push(creditPill('Tavily', pct + '%', color));
         badge.classList.toggle('warning', pct > 80);
       } else if (tavily.status === 'unconfigured') {
-        parts.push(
-          '<span class="credit-service" style="color:#484f58;">' +
-          '<span class="credit-dot grey">\u{2B1B}</span>' +
-          'Tavily \u2014' +
-          '</span>'
-        );
+        parts.push(creditPill('Tavily', '—', '#484f58'));
       } else {
-        parts.push(
-          '<span class="credit-service" style="color:#484f58;">' +
-          '<span class="credit-dot grey">\u{2B1B}</span>' +
-          'Tavily err' +
-          '</span>'
-        );
+        parts.push(creditPill('Tavily', 'err', '#484f58'));
       }
 
       // Exa
       const exa = services.exa || {};
       if (exa.status === 'ok') {
-        parts.push(
-          '<span class="credit-service">' +
-          '<span class="credit-dot green">\u{1F7E2}</span>' +
-          'Exa' +
-          '</span>'
-        );
+        parts.push(creditPill('Exa', '', '#3fb950'));
       } else {
-        parts.push(
-          '<span class="credit-service" style="color:#484f58;">' +
-          '<span class="credit-dot grey">\u{2B1B}</span>' +
-          'Exa' +
-          '</span>'
-        );
+        parts.push(creditPill('Exa', '', '#484f58'));
       }
 
-      badge.innerHTML = parts.join('<span class="credit-sep">\u{25FB}</span>') +
+      badge.innerHTML = parts.join('') +
         (data._ts ? staleBadgeHTML(data._ts) : '');
     }
 

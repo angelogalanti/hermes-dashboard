@@ -364,11 +364,11 @@
 
       bundles.forEach(b => {
         const skillCount = b.skills ? b.skills.length : 0;
-        const skillsSnippet = b.skills ? b.skills.slice(0, 3).map(s =>
+        const skillsSnippet = b.skills ? b.skills.map(s =>
           '<span style="background:#1f242c;border:1px solid #30363d;border-radius:4px;padding:2px 6px;font-size:11px;color:#8b949e;display:inline-flex;align-items:center;gap:4px;">' +
           '<i class="fa-solid fa-puzzle-piece" style="color:#2ea043;font-size:9px;"></i>' + esc(s) +
           '</span>'
-        ).join(' ') + (skillCount > 3 ? ' <span style="font-size:11px;color:#8b949e;">+' + (skillCount - 3) + '</span>' : '') : '';
+        ).join(' ') : '';
 
         const card = document.createElement('div');
         card.className = 'skill-bundle-card';

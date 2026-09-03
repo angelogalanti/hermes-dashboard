@@ -16,18 +16,18 @@
     </header>
 
     <div class="controls">
-      <button id="refresh-btn">
-        <i class="fas fa-sync-alt"></i> Aggiorna
-      </button>
-      <button id="health-btn">
-        <i class="fa-solid fa-heart-pulse"></i> Testa health
-      </button>
-      <span id="credits-badge" class="credits-badge"></span>
-      <label class="triage-toggle" title="Mostra/nascondi colonna triage">
-        <input type="checkbox" id="triage-check">
-        <i class="fa-solid fa-filter"></i> Triage
-      </label>
-      <span id="last-update"></span>
+      <div class="controls-actions">
+        <button id="refresh-btn">
+          <i class="fas fa-sync-alt"></i> Aggiorna
+        </button>
+        <button id="health-btn">
+          <i class="fa-solid fa-heart-pulse"></i> Testa health
+        </button>
+      </div>
+      <div class="controls-status">
+        <span id="credits-badge" class="credits-badge"></span>
+        <span id="last-update"></span>
+      </div>
     </div>
 
     <!-- Sezione Kanban (Board) — ALTO -->

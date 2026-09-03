@@ -35,7 +35,6 @@
     const lastUpdateEl = document.getElementById('last-update');
     const refreshBtn   = document.getElementById('refresh-btn');
     const healthBtn    = document.getElementById('health-btn');
-    const triageCheck  = document.getElementById('triage-check');
     const skillLocalContent   = document.getElementById('skill-local-content');
     const skillSharedContent  = document.getElementById('skill-shared-content');
     const skillPrimaryContent = document.getElementById('skill-primary-content');
@@ -46,16 +45,7 @@
     // Primo caricamento riuscito per sezione (errori → box solo se mai visti dati)
     const hasData = { fast: false, bundles: false, credits: false, usage: false };
 
-    // ── Triage visibility ────────────────────────────────────────
-    let showTriage = localStorage.getItem('dashboard_show_triage') === 'true';
-
-    function toggleTriage() {
-      showTriage = triageCheck.checked;
-      localStorage.setItem('dashboard_show_triage', showTriage);
-      const triageCol = document.querySelector('.kanban-column[data-col="triage"]');
-      if (triageCol) triageCol.classList.toggle('col-hidden', !showTriage);
-    }
-
+    // ── Ultimo aggiornamento ─────────────────────────────────────
     function touchLastUpdate() {
       lastUpdateEl.textContent = 'Ultimo aggiornamento: ' +
         new Date().toLocaleTimeString('it-IT');
@@ -118,8 +108,9 @@
           hasData.credits = true;
         }
       } else if (!hasData.credits && creditsBadge) {
+        creditsBadge.style.display = '';
         creditsBadge.innerHTML =
-          '<span class="credit-service" style="color:#484f58;">crediti non disponibili</span>' +
+          '<span class="credit-service"><span class="status-dot" style="background:#484f58"></span>crediti non disponibili</span>' +
           ' <button class="retry-btn" data-retry="slow"><i class="fas fa-rotate-right"></i></button>';
       } else if (creditsBadge) {
         markStale(creditsBadge);
@@ -172,10 +163,9 @@
       onOpenAgents: (name) => openAgentsModal(name),
     });
 
-    // Controlli statici (ex onclick inline)
+    // Controlli statici
     refreshBtn.addEventListener('click', () => refreshAll());
     healthBtn.addEventListener('click', () => testHealth());
-    triageCheck.addEventListener('change', () => toggleTriage());
 
     // Retry delegato per i box di errore
     document.addEventListener('click', e => {
@@ -189,8 +179,6 @@
     renderKanbanSkeleton(kanbanBoard);
     renderProfilesSkeleton(profilesBody);
     renderUsageSkeleton(usageContainer);
-    triageCheck.checked = showTriage;
-    toggleTriage();
     refreshAll().finally(() => {
       setInterval(refreshFast, FAST_INTERVAL);
       setInterval(refreshSlow, SLOW_INTERVAL);
