@@ -34,3 +34,6 @@ instance/
 .env
 *.local
 .jj/
+
+# Local worktree checkouts (experiment metadata, never commit)
+.worktrees/
