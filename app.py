@@ -4,20 +4,34 @@
 Exposes GET /api/status with profiles and kanban data.
 """
 
+import hashlib
 import json
+import logging
 import os
 import shutil
 import sqlite3
+import time
 from pathlib import Path
 
 import yaml
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 
 import credit_check
 import health_check
 import opencode_usage_scraper
 
 app = Flask(__name__)
+
+# ── Logging strutturato ──────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+)
+log = logging.getLogger('hermes-dashboard')
+
+# ── Cache in-memory per /api/status (scansioni disco+sqlite costose) ──
+_STATUS_CACHE: dict = {'ts': 0.0, 'payload': None}
+STATUS_CACHE_TTL = 10  # secondi (allineato al refresh veloce del frontend)
 
 PROFILES_DIR = Path.home() / '.hermes' / 'profiles'
 KANBAN_DB = Path.home() / '.hermes' / 'kanban.db'
@@ -602,18 +616,55 @@ def _get_profile_health() -> dict[str, str]:
     return {}
 
 
+# ── Risposte JSON con ETag (304 Not Modified) ────────────────────
+def _etag_response(payload: dict | list) -> Response:
+    """Serializza payload come JSON con header ETag.
+
+    L'ETag è calcolato sul contenuto escluso `_ts`, così il frontend
+    riceve 304 quando i dati reali non sono cambiati. Il client deve
+    inviare `If-None-Match` con l'ETag precedente.
+    """
+    if isinstance(payload, dict):
+        etag_src = {k: v for k, v in payload.items() if k != '_ts'}
+    else:
+        etag_src = payload
+    etag = hashlib.md5(
+        json.dumps(etag_src, sort_keys=True, default=str).encode()
+    ).hexdigest()
+    if request.headers.get('If-None-Match') == etag:
+        return Response(status=304)
+    body = json.dumps(payload, sort_keys=True, default=str)
+    return Response(body, mimetype='application/json', headers={'ETag': etag})
+
+
 # ── Endpoint ───────────────────────────────────────────────────────
 @app.route('/api/status')
 def api_status():
-    """GET /api/status → JSON con profili, task kanban e health."""
+    """GET /api/status → JSON con profili, task kanban e health.
+
+    Cache in-memory 10s + ETag (304 se invariato) + `_ts` per il badge
+    "dati vecchi di X" del frontend.
+    """
+    now = time.time()
+    if _STATUS_CACHE['payload'] is not None and now - _STATUS_CACHE['ts'] < STATUS_CACHE_TTL:
+        return _etag_response(_STATUS_CACHE['payload'])
+
+    start = time.monotonic()
     profiles = load_profiles()
     health_map = _get_profile_health()
     for p in profiles:
         p['health'] = health_map.get(p['name'], 'unknown')
-    return jsonify({
+    payload = {
         'profiles': profiles,
         'kanban': load_kanban(),
-    })
+        '_ts': now,
+    }
+    elapsed = time.monotonic() - start
+    if elapsed > 1.0:
+        log.warning('api_status recompute lento: %.2fs (%d profili)', elapsed, len(profiles))
+    _STATUS_CACHE['ts'] = now
+    _STATUS_CACHE['payload'] = payload
+    return _etag_response(payload)
 
 
 @app.route('/api/health')
@@ -622,7 +673,7 @@ def api_health():
        GET /api/health?force=1 → ignora cache, rifà i test.
     """
     force = request.args.get('force', '').lower() in ('1', 'true', 'yes')
-    return jsonify(health_check.run(force=force))
+    return _etag_response(health_check.run(force=force))
 
 
 @app.route('/api/credits')
@@ -631,7 +682,7 @@ def api_credits():
        GET /api/credits?force=1 → ignora cache, rifà le chiamate.
     """
     force = request.args.get('force', '').lower() in ('1', 'true')
-    return jsonify(credit_check.run(force=force))
+    return _etag_response(credit_check.run(force=force))
 
 
 @app.route('/api/profile/<name>/soul')
@@ -742,7 +793,7 @@ def api_opencode_usage():
        GET /api/opencode-usage?force=1 → ignora cache.
     """
     force = request.args.get('force', '').lower() in ('1', 'true')
-    return jsonify(opencode_usage_scraper.run(force=force))
+    return _etag_response(opencode_usage_scraper.run(force=force))
 
 
 @app.route('/')
@@ -778,7 +829,7 @@ def api_skill_bundles():
                     })
             except Exception:
                 pass
-    return jsonify(bundles)
+    return _etag_response(bundles)
 
 
 @app.route('/api/kanban/archive/<task_id>', methods=['POST'])
