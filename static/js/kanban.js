@@ -3,13 +3,15 @@
     import { fetchJSON } from './api.js';
 
     const COLUMNS = [
-      { id: 'triage',  label: 'Triage',  icon: 'fa-solid fa-filter' },
       { id: 'todo',    label: 'Todo',    icon: 'fa-solid fa-pen' },
       { id: 'ready',   label: 'Ready',   icon: 'fa-solid fa-check-double' },
       { id: 'running', label: 'Running', icon: 'fa-solid fa-play' },
       { id: 'blocked', label: 'Blocked', icon: 'fa-solid fa-ban' },
       { id: 'done',    label: 'Done',    icon: 'fa-solid fa-check' },
     ];
+
+    // Task con status sconosciuto (incluso il vecchio 'triage') → Todo
+    const FALLBACK_COLUMN = 'todo';
 
     // ── Struttura vuota della board ──────────────────────────────
     export function buildBoard(boardEl) {
@@ -100,7 +102,7 @@
         if (groups[s]) {
           groups[s].push(t);
         } else {
-          groups['triage'].push(t);
+          groups[FALLBACK_COLUMN].push(t);
         }
       });
 
