@@ -16,15 +16,15 @@
     </header>
 
     <div class="controls">
-      <button id="refresh-btn" onclick="refresh()">
+      <button id="refresh-btn">
         <i class="fas fa-sync-alt"></i> Aggiorna
       </button>
-      <button id="health-btn" onclick="testHealth()">
+      <button id="health-btn">
         <i class="fa-solid fa-heart-pulse"></i> Testa health
       </button>
       <span id="credits-badge" class="credits-badge"></span>
       <label class="triage-toggle" title="Mostra/nascondi colonna triage">
-        <input type="checkbox" id="triage-check" onchange="toggleTriage()">
+        <input type="checkbox" id="triage-check">
         <i class="fa-solid fa-filter"></i> Triage
       </label>
       <span id="last-update"></span>
@@ -99,9 +99,9 @@
   </div>
 
   <!-- ── Skill Modal ──────────────────── -->
-  <div class="skill-modal-overlay" id="skill-modal" onclick="closeSkillModal(event)">
-    <div class="skill-modal" onclick="event.stopPropagation()">
-      <button class="skill-modal-close" onclick="closeSkillModal()">&times;</button>
+  <div class="skill-modal-overlay" id="skill-modal">
+    <div class="skill-modal">
+      <button class="skill-modal-close">&times;</button>
       <div class="skill-modal-name"><i class="fa-solid fa-brain"></i> <span id="modal-name"></span></div>
       <div class="skill-modal-category" id="modal-category"></div>
       <div class="skill-modal-description" id="modal-description"></div>
@@ -159,9 +159,9 @@
   </div>
 
   <!-- SOUL/AGENTS Modal -->
-  <div class="skill-modal-overlay" id="soul-modal" onclick="closeSoulModal(event)">
-    <div class="skill-modal soul-modal" onclick="event.stopPropagation()">
-      <button class="skill-modal-close" onclick="closeSoulModal()">&times;</button>
+  <div class="skill-modal-overlay" id="soul-modal">
+    <div class="skill-modal soul-modal">
+      <button class="skill-modal-close">&times;</button>
       <div class="skill-modal-name"><i class="fa-solid fa-scroll"></i> <span id="soul-modal-title"></span></div>
       <div class="skill-modal-category" id="soul-modal-subtitle"></div>
       <pre id="soul-modal-content" style="background:#161b22;border:1px solid #21262d;border-radius:6px;padding:16px;font-size:13px;color:#c9d1d9;white-space:pre-wrap;word-wrap:break-word;max-height:70vh;overflow-y:auto;font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;"></pre>
@@ -169,9 +169,9 @@
   </div>
 
   <!-- Heartbeat Modal -->
-  <div class="skill-modal-overlay" id="heartbeat-modal" onclick="closeHeartbeatModal(event)">
-    <div class="skill-modal heartbeat-modal" onclick="event.stopPropagation()">
-      <button class="skill-modal-close" onclick="closeHeartbeatModal()">&times;</button>
+  <div class="skill-modal-overlay" id="heartbeat-modal">
+    <div class="skill-modal heartbeat-modal">
+      <button class="skill-modal-close">&times;</button>
       <div class="skill-modal-name">
         <i class="fa-solid fa-heart-pulse" style="color:#f85149;"></i>
         <span id="heartbeat-modal-title"></span>
@@ -180,6 +180,6 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js"></script>
+  <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>
