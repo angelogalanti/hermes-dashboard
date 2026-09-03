@@ -259,7 +259,7 @@
         cardsWrap.className = 'oc-cards';
 
         const windows = acc.windows || {};
-        const windowOrder = ['Rolling Usage', 'Weekly Usage', 'Monthly Usage'];
+        const windowOrder = ['5-hour Usage', 'Rolling Usage', 'Weekly Usage', 'Monthly Usage'];
         windowOrder.forEach(key => {
           const w = windows[key];
           if (!w) return;

@@ -738,7 +738,7 @@ def api_skill_delete(profile_name):
 
 @app.route('/api/opencode-usage')
 def api_opencode_usage():
-    """GET /api/opencode-usage → JSON con usage OpenCode (2 account).
+    """GET /api/opencode-usage → JSON con usage OpenCode (1 account).
        GET /api/opencode-usage?force=1 → ignora cache.
     """
     force = request.args.get('force', '').lower() in ('1', 'true')

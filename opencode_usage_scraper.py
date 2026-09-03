@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Scrape OpenCode workspace usage from opencode.ai.
 
-Reads 2 accounts from env vars (OPENCODE_ACCOUNT{1,2}_{COOKIE,WORKSPACE}),
-curls the /go page of each workspace, parses usage percentages from the
+Reads 1 account from env vars (OPENCODE_ACCOUNT2_{COOKIE,WORKSPACE}),
+curls the /go page of the workspace, parses usage percentages from the
 data-slot HTML attributes, and writes a JSON summary to disk.
 
 Cache TTL: 300s (5 min). Pass --force to bypass cache.
@@ -32,7 +32,6 @@ TIMEOUT = 15          # secondi per ogni HTTP request
 
 ACCOUNTS = [
     ("Account A", "OPENCODE_ACCOUNT2_COOKIE", "OPENCODE_ACCOUNT2_WORKSPACE"),
-    ("Account J", "OPENCODE_ACCOUNT1_COOKIE", "OPENCODE_ACCOUNT1_WORKSPACE"),
 ]
 
 
