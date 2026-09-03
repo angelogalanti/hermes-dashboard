@@ -188,20 +188,30 @@
       }
     }
 
-    // ── Card skill condivisa (con opacizzazione mai usate) ──────
+    // Pinned prima, poi più usate
+    function sortSkills(list) {
+      return [...list].sort((a, b) =>
+        ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) || (b.use_count - a.use_count)
+      );
+    }
+
+    // ── Card skill (mai usate opacizzate, pinned con iconcina) ──
     function buildSkillCard(sk, { icon, iconColor, metaHtml, delAttrs, onOpen }) {
       const card = document.createElement('div');
       card.className = 'skill-card' + (sk.use_count > 0 ? '' : ' unused');
       card.title = sk.use_count > 0 ? '' : 'Mai usata';
       const useLabel = sk.use_count > 0 ? 'usata ' + sk.use_count + ' volte' : 'mai usata';
       const ago = sk.last_used_at ? timeAgo(sk.last_used_at) : '';
+      const pinHtml = sk.pinned
+        ? '<i class="fa-solid fa-thumbtack" style="color:#d29922;font-size:11px;" title="Pinned"></i> '
+        : '';
       card.innerHTML =
         '<button class="skill-card-delete" title="Cancella skill" ' + delAttrs + '>' +
         '<i class="fa-solid fa-trash-can"></i>' +
         '</button>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
         '<i class="' + icon + '" style="color:' + iconColor + ';font-size:13px;"></i>' +
-        '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + esc(sk.name) + '</span>' +
+        '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + pinHtml + esc(sk.name) + '</span>' +
         (metaHtml || '') +
         '</div>' +
         '<div style="display:flex;gap:12px;font-size:12px;color:#8b949e;">' +
@@ -245,7 +255,7 @@
           emptyEl.textContent = '(nessuna skill locale)';
           contentEl.appendChild(emptyEl);
         } else {
-          const sorted = [...list].sort((a, b) => b.use_count - a.use_count);
+          const sorted = sortSkills(list);
           const grid = document.createElement('div');
           grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;';
           sorted.forEach(sk => {
@@ -273,7 +283,7 @@
         return;
       }
 
-      const sharedList = [...profilesWithShared[0].skills.shared.list];
+      const sharedList = sortSkills(profilesWithShared[0].skills.shared.list);
 
       const profileCounts = {};
       sharedList.forEach(sk => {
@@ -289,7 +299,7 @@
         });
       });
 
-      sharedList.sort((a, b) => b.use_count - a.use_count);
+      // (già ordinata con sortSkills: pinned prima, poi use_count)
 
       const grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;';
@@ -323,7 +333,7 @@
       const defaultProfile = profiles.find(p => p.name === 'default');
 
       const primaryList = (defaultProfile && defaultProfile.skills && defaultProfile.skills.primary && defaultProfile.skills.primary.list)
-        ? [...defaultProfile.skills.primary.list]
+        ? sortSkills(defaultProfile.skills.primary.list)
         : [];
 
       if (!primaryList.length) {
@@ -331,8 +341,6 @@
           '<div class="empty-state"><i class="fa-solid fa-puzzle-piece"></i>Nessuna skill primaria per questo profilo</div>';
         return;
       }
-
-      primaryList.sort((a, b) => b.use_count - a.use_count);
 
       const grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;';

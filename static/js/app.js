@@ -7,6 +7,7 @@
     //   scroll e righe espanse restano intatti.
 
     import { fetchJSON, NOT_MODIFIED, dropEtag } from './api.js';
+    import { fmtAge } from './utils.js';
     import {
       buildBoard, renderKanbanBoard, renderKanbanSkeleton,
       renderKanbanError, initKanban,
@@ -133,11 +134,22 @@
       await Promise.allSettled([refreshFast(), refreshSlow()]);
     }
 
-    // ── Test health ──────────────────────────────────────────────
+    // ── Test health (con conferma: chiama API esterne) ──────────
     async function testHealth() {
       healthBtn.classList.add('loading');
       healthBtn.disabled = true;
       try {
+        // Età dell'ultimo test (risposta cachata, economica) per il confirm
+        let ageTxt = 'sconosciuta';
+        try {
+          const cached = await fetchJSON('/api/health', { retries: 0 });
+          if (cached && cached !== NOT_MODIFIED && cached._ts) {
+            ageTxt = fmtAge(cached._ts);
+            const btn = healthBtn;
+            if (btn) btn.title = 'Ultimo test: ' + ageTxt;
+          }
+        } catch (e) { /* si procede comunque al test */ }
+        if (!confirm('Lanciare il test health sui provider? (ultimo test: ' + ageTxt + ')')) return;
         dropEtag('/api/status');
         await fetchJSON('/api/health?force=1');
         await refreshAll();
@@ -179,7 +191,31 @@
     renderKanbanSkeleton(kanbanBoard);
     renderProfilesSkeleton(profilesBody);
     renderUsageSkeleton(usageContainer);
-    refreshAll().finally(() => {
-      setInterval(refreshFast, FAST_INTERVAL);
-      setInterval(refreshSlow, SLOW_INTERVAL);
+
+    let fastTimer = null;
+    let slowTimer = null;
+
+    function startAutoRefresh() {
+      stopAutoRefresh();
+      // I timer scattano solo a tab visibile (niente polling sprecato)
+      fastTimer = setInterval(() => { if (!document.hidden) refreshFast(); }, FAST_INTERVAL);
+      slowTimer = setInterval(() => { if (!document.hidden) refreshSlow(); }, SLOW_INTERVAL);
+    }
+
+    function stopAutoRefresh() {
+      if (fastTimer) clearInterval(fastTimer);
+      if (slowTimer) clearInterval(slowTimer);
+      fastTimer = slowTimer = null;
+    }
+
+    // Tab nascosta → stop; al ritorno → refresh immediato + restart timer
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopAutoRefresh();
+      } else {
+        refreshAll();
+        startAutoRefresh();
+      }
     });
+
+    refreshAll().finally(() => startAutoRefresh());

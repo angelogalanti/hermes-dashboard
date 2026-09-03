@@ -738,6 +738,20 @@
     .kanban-card-oc i { font-size: 9px; }
     .kanban-card-oc.no-oc { color: #8b949e; background: rgba(139, 148, 158, 0.1); }
 
+    .kanban-card-prio {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .kanban-card-prio i { font-size: 8px; }
+    .kanban-card-prio.prio-high { color: #f85149; background: rgba(248, 81, 73, 0.12); }
+    .kanban-card-prio.prio-med  { color: #f0883e; background: rgba(240, 136, 62, 0.12); }
+    .kanban-card-prio.prio-low  { color: #8b949e; background: rgba(139, 148, 158, 0.1); }
+
     .kanban-column-empty {
       text-align: center;
       padding: 24px 8px;

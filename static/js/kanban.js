@@ -179,6 +179,18 @@
             ocHtml = '<span class="kanban-card-oc no-oc"><i class="fa-solid fa-pen"></i> direct</span>';
           }
 
+          // Badge priorità (scala 0-100, 999/null = non impostata → nascosto)
+          let prioHtml = '';
+          const pNum = t.priority === null || t.priority === undefined ? NaN : Number(t.priority);
+          if (Number.isFinite(pNum) && pNum !== 999) {
+            let prioCls = 'prio-low';
+            if (pNum >= 80)      prioCls = 'prio-high';
+            else if (pNum >= 50) prioCls = 'prio-med';
+            prioHtml = '<span class="kanban-card-prio ' + prioCls + '" title="Priorità ' + esc(String(t.priority)) + '">' +
+              '<i class="fa-solid fa-flag"></i> P' + esc(String(t.priority)) +
+              '</span>';
+          }
+
           card.innerHTML =
             archiveBtn +
             '<div class="kanban-card-title">' + esc(t.title) + '</div>' +
@@ -189,7 +201,7 @@
             '</span>' +
             '</div>' +
             '<div class="kanban-card-footer">' +
-            hbHtml + elapsedHtml + modelHtml + ocHtml + hbCountHtml +
+            hbHtml + elapsedHtml + modelHtml + ocHtml + prioHtml + hbCountHtml +
             '</div>' +
             hbNoteHtml;
           cardsEl.appendChild(card);
