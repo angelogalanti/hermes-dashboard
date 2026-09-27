@@ -36,7 +36,8 @@ STATUS_CACHE_TTL = 10  # secondi (allineato al refresh veloce del frontend)
 PROFILES_DIR = Path.home() / '.hermes' / 'profiles'
 KANBAN_DB = Path.home() / '.hermes' / 'kanban.db'
 SHARED_SKILLS_DIR = Path.home() / '.hermes' / 'skills-shared'
-PRIMARY_SKILLS_DIR = Path.home() / '.hermes' / 'skills-primary'
+PRIMARY_SKILLS_DIR = Path.home() / '.hermes' / 'skills-generalist'
+FRONTLINE_SKILLS_DIR = Path.home() / '.hermes' / 'skills-frontline'
 GLOBAL_SKILLS_DIR = Path.home() / '.hermes' / 'skills'
 
 SKILL_BASES = {
@@ -469,11 +470,18 @@ def _load_default_profile() -> dict | None:
     # Skill primarie da ~/.hermes/skills-primary/
     local_names, local_categories, local_cat_map = _scan_skills_dir(GLOBAL_SKILLS_DIR)
     shared_names, shared_categories, shared_cat_map = _scan_skills_dir(SHARED_SKILLS_DIR)
+    fn, fc, fcm = _scan_skills_dir(FRONTLINE_SKILLS_DIR)  # frontline: per il default conta come condivisa
+    shared_names |= fn
+    shared_categories |= fc
+    for k, v in fcm.items():
+        shared_cat_map.setdefault(k, v)
     primary_names, primary_categories, primary_cat_map = _scan_skills_dir(PRIMARY_SKILLS_DIR)
 
     # Carica descrizioni skill
     desc_local = _load_skill_descriptions(GLOBAL_SKILLS_DIR)
     desc_shared = _load_skill_descriptions(SHARED_SKILLS_DIR)
+    for k, v in _load_skill_descriptions(FRONTLINE_SKILLS_DIR).items():
+        desc_shared.setdefault(k, v)
     desc_primary = _load_skill_descriptions(PRIMARY_SKILLS_DIR)
     merged_desc: dict[str, str] = {}
     merged_desc.update(desc_shared)
