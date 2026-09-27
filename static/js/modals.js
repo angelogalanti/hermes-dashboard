@@ -89,7 +89,9 @@
       if (type === 'local') {
         profileSpan.textContent = 'Profilo: ' + (profileName || '?');
       } else if (type === 'primary') {
-        profileSpan.textContent = 'Skill primaria — solo default e ceo';
+        profileSpan.textContent = 'Skill generalist — solo default e ceo';
+      } else if (type === 'frontline') {
+        profileSpan.textContent = 'Skill frontline — default, ceo e teacher';
       } else if (type === 'shared') {
         profileSpan.textContent = 'Skill condivisa — presente in tutti i profili';
       } else if (type === 'bundle') {

@@ -43,7 +43,8 @@ GLOBAL_SKILLS_DIR = Path.home() / '.hermes' / 'skills'
 SKILL_BASES = {
     'local':   PROFILES_DIR,
     'shared':  SHARED_SKILLS_DIR,
-    'primary': PRIMARY_SKILLS_DIR,
+    'frontline': FRONTLINE_SKILLS_DIR,
+    'primary': PRIMARY_SKILLS_DIR,  # primary == skills-generalist (solo default/ceo)
 }
 
 
@@ -68,75 +69,74 @@ def add_cors_headers(response):
     return response
 
 
-# ── Helpers per skill ──────────────────────────────────────────────
-def _scan_skills_dir(scan_dir: Path) -> tuple[set[str], set[str], dict[str, str]]:
-    """Scan a directory for SKILL.md files.
+# ── Lettura gateway_state (condivisa dai loader profili) ──────────
+def _read_gateway(gw_path: Path) -> tuple[str, list]:
+    """Legge gateway_state.json; PID morto → stopped. Torna (stato, piattaforme)."""
+    gateway = 'unknown'
+    platforms: list = []
+    if gw_path.is_file():
+        try:
+            with open(gw_path) as f:
+                gw = json.load(f)
+            gw_state = gw.get('gateway_state', 'unknown')
+            gw_pid = gw.get('pid')
+            platforms_raw = gw.get('platforms', {})
+            # Se PID presente ma processo morto → stato fittizio
+            if gw_pid and not _pid_is_alive(gw_pid):
+                gw_state = 'stopped'
+                platforms_raw = {}
+            gateway = gw_state
+            # Filtra sotto-agent (chiavi con ':') e api_server interna — solo chat reali
+            platforms = sorted(
+                p for p, v in platforms_raw.items()
+                if isinstance(v, dict) and v.get('state') == 'connected'
+                and ':' not in p and p != 'api_server'
+            )
+        except (json.JSONDecodeError, OSError):
+            pass
+    return gateway, platforms
 
-    Returns (set of skill names, set of categories, dict of skill_name → category).
-    Handles both flat (<skill>/SKILL.md) and categorized (<cat>/<skill>/SKILL.md) layouts.
-    For flat skills the dict maps to None; for categorized skills it maps to the category name.
+
+# ── Helpers per skill ──────────────────────────────────────────────
+def _scan_skills(scan_dir: Path) -> tuple[set[str], set[str], dict[str, str], dict[str, str]]:
+    """Unica passata rglob: nomi, categorie, mappa skill→categoria, descrizioni.
+
+    Gestisce layout flat (<skill>/SKILL.md) e categorizzato (<cat>/<skill>/SKILL.md).
     """
     names: set[str] = set()
     categories: set[str] = set()
     name_to_cat: dict[str, str] = {}
-    if not scan_dir.is_dir():
-        return names, categories, name_to_cat
-    for sf in sorted(scan_dir.rglob('SKILL.md')):
-        rel = sf.relative_to(scan_dir)
-        parts = rel.parts
-        if any(p.startswith('.') for p in parts):
-            continue  # .archive/.hub/.git: Hermes non le carica (_SCAN_SKIP_PARTS)
-        if len(parts) == 2:
-            # <skill-name>/SKILL.md — flat
-            names.add(parts[0])
-            if parts[0] not in name_to_cat:
-                name_to_cat[parts[0]] = ''
-        elif len(parts) == 3:
-            # <category>/<skill-name>/SKILL.md
-            categories.add(parts[0])
-            names.add(parts[1])
-            name_to_cat[parts[1]] = parts[0]
-        # Longer paths (deeper subdirs) are references/scripts — ignore
-    return names, categories, name_to_cat
-
-
-def _load_skill_descriptions(scan_dir: Path) -> dict[str, str]:
-    """Scan a directory for SKILL.md files and extract descriptions from YAML frontmatter.
-
-    Returns {skill_name: description_string}.
-    Handles both flat (<skill>/SKILL.md) and categorized (<cat>/<skill>/SKILL.md) layouts.
-    """
     descriptions: dict[str, str] = {}
     if not scan_dir.is_dir():
-        return descriptions
+        return names, categories, name_to_cat, descriptions
     for sf in sorted(scan_dir.rglob('SKILL.md')):
         rel = sf.relative_to(scan_dir)
         parts = rel.parts
         if any(p.startswith('.') for p in parts):
             continue  # .archive/.hub/.git: Hermes non le carica (_SCAN_SKIP_PARTS)
         if len(parts) == 2:
-            skill_name = parts[0]
+            skill_name, cat = parts[0], ''
         elif len(parts) == 3:
-            skill_name = parts[1]
+            cat, skill_name = parts[0], parts[1]
+            categories.add(cat)
         else:
-            continue
-        try:
-            with open(sf) as f:
-                content = f.read(4096)  # Read enough for frontmatter
-            # Parse YAML frontmatter between --- markers
-            content = content.lstrip('\ufeff')
-            if content.startswith('---'):
-                end_idx = content.find('---', 3)
-                if end_idx != -1:
-                    yaml_block = content[3:end_idx]
-                    fm = yaml.safe_load(yaml_block)
-                    if isinstance(fm, dict) and 'description' in fm:
-                        desc = str(fm['description']).strip()
-                        if desc:
-                            descriptions[skill_name] = desc
-        except (OSError, UnicodeDecodeError, yaml.YAMLError):
-            pass
-    return descriptions
+            continue  # reference/scripts in sottodir — ignora
+        names.add(skill_name)
+        if skill_name not in name_to_cat:
+            name_to_cat[skill_name] = cat
+        if skill_name not in descriptions:
+            try:
+                with open(sf) as f:
+                    content = f.read(4096).lstrip('﻿')
+                if content.startswith('---'):
+                    end_idx = content.find('---', 3)
+                    if end_idx != -1:
+                        fm = yaml.safe_load(content[3:end_idx])
+                        if isinstance(fm, dict) and fm.get('description'):
+                            descriptions[skill_name] = str(fm['description']).strip()
+            except (OSError, UnicodeDecodeError, yaml.YAMLError):
+                pass
+    return names, categories, name_to_cat, descriptions
 
 
 def _build_skill_lists(
@@ -151,6 +151,9 @@ def _build_skill_lists(
     local_cat_map: dict[str, str] | None = None,
     shared_cat_map: dict[str, str] | None = None,
     primary_cat_map: dict[str, str] | None = None,
+    frontline_names: set[str] | None = None,
+    frontline_categories: set[str] | None = None,
+    frontline_cat_map: dict[str, str] | None = None,
 ) -> dict:
     """Build the full skill response dict with local/shared/primary split + legacy fields.
 
@@ -175,18 +178,27 @@ def _build_skill_lists(
         shared_cat_map = {}
     if primary_cat_map is None:
         primary_cat_map = {}
+    if frontline_names is None:
+        frontline_names = set()
+    if frontline_categories is None:
+        frontline_categories = set()
+    if frontline_cat_map is None:
+        frontline_cat_map = {}
 
-    # Primary takes precedence over shared (but local still highest)
-    # First subtract local from shared/primary, then primary from shared
+    # Precedenza: local > primary > frontline > shared
     shared_names = shared_names - local_names
     if primary_names:
         primary_names = primary_names - local_names
         shared_names = shared_names - primary_names
+    if frontline_names:
+        frontline_names = frontline_names - local_names - (primary_names or set())
+        shared_names = shared_names - frontline_names
 
     local_skills: dict[str, dict] = {}
     shared_skills: dict[str, dict] = {}
     primary_skills: dict[str, dict] = {}
-    all_categories: set[str] = set(local_categories) | set(shared_categories) | set(primary_categories)
+    frontline_skills: dict[str, dict] = {}
+    all_categories: set[str] = set(local_categories) | set(shared_categories) | set(primary_categories) | set(frontline_categories)
 
     def _build_skill_obj(skill_name, u, category):
         return {
@@ -225,6 +237,8 @@ def _build_skill_lists(
             _merge(local_skills, skill_name, u, cat)
         elif primary_names and skill_name in primary_names:
             _merge(primary_skills, skill_name, u, cat)
+        elif frontline_names and skill_name in frontline_names:
+            _merge(frontline_skills, skill_name, u, cat)
         elif skill_name in shared_names:
             _merge(shared_skills, skill_name, u, cat)
         # Orphan: usage data without SKILL.md on disk → skip (was deleted)
@@ -237,6 +251,10 @@ def _build_skill_lists(
         for skill_name in sorted(primary_names):
             if skill_name not in primary_skills:
                 primary_skills[skill_name] = _build_skill_obj(skill_name, None, primary_cat_map.get(skill_name))
+    if frontline_names:
+        for skill_name in sorted(frontline_names):
+            if skill_name not in frontline_skills:
+                frontline_skills[skill_name] = _build_skill_obj(skill_name, None, frontline_cat_map.get(skill_name))
     for skill_name in sorted(shared_names):
         if skill_name not in shared_skills:
             shared_skills[skill_name] = _build_skill_obj(skill_name, None, shared_cat_map.get(skill_name))
@@ -244,7 +262,7 @@ def _build_skill_lists(
     # ── Third pass: fill missing categories from directory scan maps ──
     # Skills with usage data may have flat keys (no category prefix) even when
     # they live in a category subdirectory. Override category from scan maps.
-    for sk_map, target in [(local_cat_map, local_skills), (primary_cat_map, primary_skills), (shared_cat_map, shared_skills)]:
+    for sk_map, target in [(local_cat_map, local_skills), (primary_cat_map, primary_skills), (frontline_cat_map, frontline_skills), (shared_cat_map, shared_skills)]:
         for skill_name, cat in sk_map.items():
             if cat and skill_name in target and not target[skill_name].get('category'):
                 target[skill_name]['category'] = cat
@@ -252,10 +270,11 @@ def _build_skill_lists(
     # ── Sort all lists ──
     local_sorted = sorted(local_skills.values(), key=lambda s: s['use_count'], reverse=True)
     primary_sorted = sorted(primary_skills.values(), key=lambda s: s['use_count'], reverse=True)
+    frontline_sorted = sorted(frontline_skills.values(), key=lambda s: s['use_count'], reverse=True)
     shared_sorted = sorted(shared_skills.values(), key=lambda s: s['use_count'], reverse=True)
 
     # ── Combined list for legacy fields ──
-    all_known = list(local_skills.values()) + list(primary_skills.values()) + list(shared_skills.values())
+    all_known = list(local_skills.values()) + list(primary_skills.values()) + list(frontline_skills.values()) + list(shared_skills.values())
     combined_sorted = sorted(all_known, key=lambda s: s['use_count'], reverse=True)
     top5 = combined_sorted[:5]
 
@@ -278,7 +297,7 @@ def _build_skill_lists(
             'list': list(shared_sorted),
         },
         # Legacy fields (backward compat per-profile badge)
-        'total': len(local_sorted) + len(shared_sorted) + len(primary_sorted),
+        'total': len(local_sorted) + len(shared_sorted) + len(primary_sorted) + len(frontline_sorted),
         'categories': sorted(all_categories),
         'top': [_legacy(s) for s in top5],
         'list': [_legacy(s) for s in combined_sorted],
@@ -294,15 +313,25 @@ def _build_skill_lists(
     else:
         result['primary'] = None
 
+    # Add frontline section only when there are frontline skills
+    if frontline_names:
+        result['frontline'] = {
+            'total': len(frontline_sorted),
+            'categories': sorted(frontline_categories),
+            'list': list(frontline_sorted),
+        }
+    else:
+        result['frontline'] = None
+
     return result
 
 
 # ── Skill per profilo ──────────────────────────────────────────────
 def _load_profile_skills(name: str) -> dict | None:
-    """Legge le skill installate per un profilo, separate in locali, condivise e primarie.
+    """Legge le skill installate per un profilo, separate in locali, condivise, frontline e primarie.
 
-    Locali: skills/ del profilo. Condivise: external_dirs dal config.yaml.
-    Primarie: external_dirs che puntano a skills-primary.
+    Locali: skills/ del profilo. Condivise/frontline/primarie: external_dirs dal config.yaml
+    (frontline = skills-frontline, primarie = skills-generalist).
     """
     skills_dir = PROFILES_DIR / name / 'skills'
 
@@ -310,8 +339,11 @@ def _load_profile_skills(name: str) -> dict | None:
     config_path = PROFILES_DIR / name / 'config.yaml'
     external_dirs: list[Path] = []
     if config_path.is_file():
-        with open(config_path) as f:
-            cfg = yaml.safe_load(f)
+        try:
+            with open(config_path) as f:
+                cfg = yaml.safe_load(f)
+        except (OSError, UnicodeDecodeError, yaml.YAMLError):
+            cfg = None
         if isinstance(cfg, dict):
             sk_cfg = cfg.get('skills', {})
             if isinstance(sk_cfg, dict):
@@ -326,57 +358,81 @@ def _load_profile_skills(name: str) -> dict | None:
     usage_path = skills_dir / '.usage.json'
     usage: dict = {}
     if usage_path.is_file():
-        with open(usage_path) as f:
-            usage = json.load(f)
+        try:
+            with open(usage_path) as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                usage = loaded
+        except (OSError, json.JSONDecodeError):
+            pass
 
-    # Carica descrizioni skill
-    desc_local: dict[str, str] = {}
-    desc_shared: dict[str, str] = {}
-    desc_primary: dict[str, str] = {}
+    # Scansiona directory locali (unica passata: nomi + descrizioni)
+    local_names, local_categories, local_cat_map, desc_local = _scan_skills(skills_dir)
 
-    # Scansiona directory locali
-    local_names, local_categories, local_cat_map = _scan_skills_dir(skills_dir)
-    desc_local = _load_skill_descriptions(skills_dir)
-
-    # Separa directory primarie da quelle condivise
+    # Separa directory primarie/frontline da quelle condivise
     primary_dirs: list[Path] = []
+    frontline_dirs: list[Path] = []
     shared_dirs: list[Path] = []
     primary_ref = PRIMARY_SKILLS_DIR.resolve()
+    try:
+        frontline_ref = FRONTLINE_SKILLS_DIR.resolve()
+    except OSError:
+        frontline_ref = None
     for d in external_dirs:
-        if d.resolve() == primary_ref:
+        rd = d.resolve()
+        if rd == primary_ref:
             primary_dirs.append(d)
+        elif frontline_ref is not None and rd == frontline_ref:
+            frontline_dirs.append(d)
         else:
             shared_dirs.append(d)
 
-    # Scansiona directory condivise (non-primary)
+    # Scansiona directory condivise (non-primary) — unica passata
     shared_names: set[str] = set()
     shared_categories: set[str] = set()
     shared_cat_map: dict[str, str] = {}
+    desc_shared: dict[str, str] = {}
     for ext_dir in shared_dirs:
-        sn, sc, scm = _scan_skills_dir(ext_dir)
+        sn, sc, scm, desc = _scan_skills(ext_dir)
         shared_names |= sn
         shared_categories |= sc
         for k, v in scm.items():
-            shared_cat_map[k] = v
-        for k, v in _load_skill_descriptions(ext_dir).items():
-            desc_shared[k] = v
+            shared_cat_map.setdefault(k, v)
+        for k, v in desc.items():
+            desc_shared.setdefault(k, v)
 
-    # Scansiona directory primarie
+    # Scansiona directory primarie — unica passata
     primary_names: set[str] = set()
     primary_categories: set[str] = set()
     primary_cat_map: dict[str, str] = {}
+    desc_primary: dict[str, str] = {}
     for prim_dir in primary_dirs:
-        sn, sc, scm = _scan_skills_dir(prim_dir)
+        sn, sc, scm, desc = _scan_skills(prim_dir)
         primary_names |= sn
         primary_categories |= sc
         for k, v in scm.items():
-            primary_cat_map[k] = v
-        for k, v in _load_skill_descriptions(prim_dir).items():
-            desc_primary[k] = v
+            primary_cat_map.setdefault(k, v)
+        for k, v in desc.items():
+            desc_primary.setdefault(k, v)
 
-    # Merge descriptions: primary overrides shared, local overrides all
+    # Scansiona directory frontline — unica passata
+    frontline_names: set[str] = set()
+    frontline_categories: set[str] = set()
+    frontline_cat_map: dict[str, str] = {}
+    desc_frontline: dict[str, str] = {}
+    for fl_dir in frontline_dirs:
+        sn, sc, scm, desc = _scan_skills(fl_dir)
+        frontline_names |= sn
+        frontline_categories |= sc
+        for k, v in scm.items():
+            frontline_cat_map.setdefault(k, v)
+        for k, v in desc.items():
+            desc_frontline.setdefault(k, v)
+
+    # Merge descriptions: shared < frontline < primary < local
     merged_desc: dict[str, str] = {}
     merged_desc.update(desc_shared)
+    merged_desc.update(desc_frontline)
     merged_desc.update(desc_primary)
     merged_desc.update(desc_local)
 
@@ -385,6 +441,7 @@ def _load_profile_skills(name: str) -> dict | None:
         local_categories, shared_categories, primary_categories,
         usage, merged_desc,
         local_cat_map, shared_cat_map, primary_cat_map,
+        frontline_names, frontline_categories, frontline_cat_map,
     )
 
 
@@ -407,8 +464,11 @@ def _load_profile(name: str) -> dict | None:
 
     # Legge config.yaml → model.default e model.provider
     if config_path.is_file():
-        with open(config_path) as f:
-            cfg = yaml.safe_load(f)
+        try:
+            with open(config_path) as f:
+                cfg = yaml.safe_load(f)
+        except (OSError, UnicodeDecodeError, yaml.YAMLError):
+            cfg = None
         if isinstance(cfg, dict):
             mc = cfg.get('model', {})
             if isinstance(mc, dict):
@@ -419,25 +479,8 @@ def _load_profile(name: str) -> dict | None:
     if not info['model']:
         return None
 
-    # Legge gateway_state.json se presente
-    if gateway_path.is_file():
-        try:
-            with open(gateway_path) as f:
-                gw = json.load(f)
-            gw_state = gw.get('gateway_state', 'unknown')
-            gw_pid = gw.get('pid')
-            platforms_raw = gw.get('platforms', {})
-            # Se PID presente ma processo morto → stato fittizio
-            if gw_pid and not _pid_is_alive(gw_pid):
-                gw_state = 'stopped'
-                platforms_raw = {}
-            info['gateway'] = gw_state
-            info['platforms'] = sorted(
-                p for p, v in platforms_raw.items()
-                if isinstance(v, dict) and v.get('state') == 'connected'
-            )
-        except (json.JSONDecodeError, OSError):
-            pass
+    # Legge gateway_state.json (helper condiviso, filtra sotto-agent)
+    info['gateway'], info['platforms'] = _read_gateway(gateway_path)
 
     # Legge skill del profilo
     info['skills'] = _load_profile_skills(name)
@@ -455,8 +498,11 @@ def _load_default_profile() -> dict | None:
     if not config_path.is_file():
         return None
 
-    with open(config_path) as f:
-        cfg = yaml.safe_load(f)
+    try:
+        with open(config_path) as f:
+            cfg = yaml.safe_load(f)
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return None
 
     if not isinstance(cfg, dict):
         return None
@@ -465,26 +511,14 @@ def _load_default_profile() -> dict | None:
     model = mc.get('default') if isinstance(mc, dict) else None
     provider = mc.get('provider') if isinstance(mc, dict) else None
 
-    # Skill locali da ~/.hermes/skills/ (globali)
-    # Skill condivise da ~/.hermes/skills-shared/
-    # Skill primarie da ~/.hermes/skills-primary/
-    local_names, local_categories, local_cat_map = _scan_skills_dir(GLOBAL_SKILLS_DIR)
-    shared_names, shared_categories, shared_cat_map = _scan_skills_dir(SHARED_SKILLS_DIR)
-    fn, fc, fcm = _scan_skills_dir(FRONTLINE_SKILLS_DIR)  # frontline: per il default conta come condivisa
-    shared_names |= fn
-    shared_categories |= fc
-    for k, v in fcm.items():
-        shared_cat_map.setdefault(k, v)
-    primary_names, primary_categories, primary_cat_map = _scan_skills_dir(PRIMARY_SKILLS_DIR)
-
-    # Carica descrizioni skill
-    desc_local = _load_skill_descriptions(GLOBAL_SKILLS_DIR)
-    desc_shared = _load_skill_descriptions(SHARED_SKILLS_DIR)
-    for k, v in _load_skill_descriptions(FRONTLINE_SKILLS_DIR).items():
-        desc_shared.setdefault(k, v)
-    desc_primary = _load_skill_descriptions(PRIMARY_SKILLS_DIR)
+    # Skill locali / condivise / primarie / frontline — unica passata rglob ciascuna
+    local_names, local_categories, local_cat_map, desc_local = _scan_skills(GLOBAL_SKILLS_DIR)
+    shared_names, shared_categories, shared_cat_map, desc_shared = _scan_skills(SHARED_SKILLS_DIR)
+    frontline_names, frontline_categories, frontline_cat_map, desc_frontline = _scan_skills(FRONTLINE_SKILLS_DIR)
+    primary_names, primary_categories, primary_cat_map, desc_primary = _scan_skills(PRIMARY_SKILLS_DIR)
     merged_desc: dict[str, str] = {}
     merged_desc.update(desc_shared)
+    merged_desc.update(desc_frontline)
     merged_desc.update(desc_primary)
     merged_desc.update(desc_local)
 
@@ -492,33 +526,18 @@ def _load_default_profile() -> dict | None:
     usage: dict = {}
     usage_path = GLOBAL_SKILLS_DIR / '.usage.json'
     if usage_path.is_file():
-        with open(usage_path) as f:
-            usage = json.load(f)
-
-    skills = _build_skill_lists(local_names, shared_names, primary_names, local_categories, shared_categories, primary_categories, usage, merged_desc, local_cat_map, shared_cat_map, primary_cat_map)
-
-    # Legge gateway_state.json della root (default profile gateway)
-    gateway = 'unknown'
-    platforms = []
-    gw_path = Path.home() / '.hermes' / 'gateway_state.json'
-    if gw_path.is_file():
         try:
-            with open(gw_path) as f:
-                gw = json.load(f)
-            gw_state = gw.get('gateway_state', 'unknown')
-            gw_pid = gw.get('pid')
-            plat = gw.get('platforms', {})
-            # Se PID presente ma processo morto → stato fittizio
-            if gw_pid and not _pid_is_alive(gw_pid):
-                gw_state = 'stopped'
-                plat = {}
-            gateway = gw_state
-            platforms = sorted(
-                p for p, v in plat.items()
-                if isinstance(v, dict) and v.get('state') == 'connected'
-            )
-        except (json.JSONDecodeError, OSError):
+            with open(usage_path) as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                usage = loaded
+        except (OSError, json.JSONDecodeError):
             pass
+
+    skills = _build_skill_lists(local_names, shared_names, primary_names, local_categories, shared_categories, primary_categories, usage, merged_desc, local_cat_map, shared_cat_map, primary_cat_map, frontline_names, frontline_categories, frontline_cat_map)
+
+    # Legge gateway_state.json della root (helper condiviso)
+    gateway, platforms = _read_gateway(Path.home() / '.hermes' / 'gateway_state.json')
 
     return {
         'name': 'default',
@@ -567,53 +586,61 @@ def load_kanban() -> list[dict]:
             'FROM tasks WHERE status != ? ORDER BY created_at DESC',
             ('archived',)
         )
-        rows = cur.fetchall()
-        tasks = []
-        for r in rows:
-            t = dict(r)
-            cur.execute(
-                'SELECT COUNT(*) as cnt FROM task_events '
-                'WHERE task_id=? AND kind=?',
-                (t['id'], 'heartbeat')
-            )
-            t['heartbeat_count'] = cur.fetchone()['cnt']
+        tasks = [dict(r) for r in cur.fetchall()]
 
-            # Leggi l'ultima nota heartbeat dal payload dell'evento più recente
-            cur.execute(
-                'SELECT payload FROM task_events '
-                'WHERE task_id=? AND kind=? '
-                'ORDER BY created_at DESC LIMIT 1',
-                (t['id'], 'heartbeat')
-            )
-            hb_row = cur.fetchone()
-            if hb_row and hb_row['payload']:
-                try:
-                    payload = json.loads(hb_row['payload'])
-                    if isinstance(payload, dict) and 'note' in payload:
-                        note = payload['note']
-                        if note and isinstance(note, str) and note.strip():
-                            t['last_heartbeat_note'] = note.strip()
-                except (json.JSONDecodeError, TypeError):
-                    pass
+        # ── 3 query aggregate invece di 3×N (ponytail: O(tasks), non O(tasks×eventi)) ──
+        cur.execute(
+            "SELECT task_id, COUNT(*) as cnt FROM task_events "
+            "WHERE kind='heartbeat' GROUP BY task_id"
+        )
+        hb_counts = {r['task_id']: r['cnt'] for r in cur.fetchall()}
 
-            # Leggi used_opencode dal metadata dell'ultimo run completato
-            cur.execute(
-                'SELECT metadata FROM task_runs '
-                'WHERE task_id=? AND metadata IS NOT NULL AND metadata != "" '
-                'ORDER BY started_at DESC LIMIT 1',
-                (t['id'],)
-            )
-            run_row = cur.fetchone()
-            if run_row:
-                try:
-                    meta = json.loads(run_row['metadata'])
-                    if isinstance(meta, dict) and 'used_opencode' in meta:
-                        t['used_opencode'] = meta['used_opencode']
-                except (json.JSONDecodeError, TypeError):
-                    pass
+        # Ultima nota heartbeat per task (ORDER+Dedup in Python: il payload
+        # della riga MAX non è selezionabile con GROUP BY in modo portabile)
+        cur.execute(
+            "SELECT task_id, payload FROM task_events "
+            "WHERE kind='heartbeat' ORDER BY created_at DESC"
+        )
+        hb_notes: dict = {}
+        for r in cur.fetchall():
+            tid = r['task_id']
+            if tid in hb_notes or not r['payload']:
+                continue
+            try:
+                payload = json.loads(r['payload'])
+                note = payload.get('note') if isinstance(payload, dict) else None
+                if note and isinstance(note, str) and note.strip():
+                    hb_notes[tid] = note.strip()
+                else:
+                    hb_notes[tid] = None  # visto: nessun'altra riga da provare
+            except (json.JSONDecodeError, TypeError):
+                continue
 
-            tasks.append(t)
+        # used_opencode dal metadata del run più recente per task
+        cur.execute(
+            'SELECT task_id, metadata FROM task_runs '
+            'WHERE metadata IS NOT NULL AND metadata != "" '
+            'ORDER BY started_at DESC'
+        )
+        oc_map: dict = {}
+        for r in cur.fetchall():
+            tid = r['task_id']
+            if tid in oc_map:
+                continue
+            try:
+                meta = json.loads(r['metadata'])
+                if isinstance(meta, dict) and 'used_opencode' in meta:
+                    oc_map[tid] = meta['used_opencode']
+            except (json.JSONDecodeError, TypeError):
+                continue
         conn.close()
+
+        for t in tasks:
+            t['heartbeat_count'] = hb_counts.get(t['id'], 0)
+            if t['id'] in hb_notes and hb_notes[t['id']]:
+                t['last_heartbeat_note'] = hb_notes[t['id']]
+            if t['id'] in oc_map:
+                t['used_opencode'] = oc_map[t['id']]
         return tasks
     except sqlite3.Error:
         return []
@@ -732,8 +759,8 @@ def api_profile_agents(name):
 @app.route('/api/skills/<profile_name>/delete', methods=['POST'])
 def api_skill_delete(profile_name):
     """POST /api/skills/<profile_name>/delete
-    Body JSON: {"name": "skill-name", "type": "local|shared|primary"}
-    Cancella la skill (locale, condivisa o primaria).
+    Body JSON: {"name": "skill-name", "type": "local|shared|frontline|primary"}
+    Cancella la skill (locale, condivisa, frontline o primaria).
     """
     try:
         data = request.get_json(force=True)
@@ -753,9 +780,21 @@ def api_skill_delete(profile_name):
     skill_name = skill_name.strip()
 
     if skill_type == 'local':
-        base_dir = PROFILES_DIR / profile_name / 'skills'
+        # 'default' è virtuale: skill locali in ~/.hermes/skills/, non in profiles/default/
+        if profile_name == 'default':
+            base_dir = GLOBAL_SKILLS_DIR
+        else:
+            base_dir = PROFILES_DIR / profile_name / 'skills'
+        usage_files = [base_dir / '.usage.json']
     else:
         base_dir = SKILL_BASES[skill_type]
+        # Shared/primary: spazza gli usage di default + tutti i profili
+        usage_files = [GLOBAL_SKILLS_DIR / '.usage.json']
+        if PROFILES_DIR.is_dir():
+            usage_files += [
+                e / 'skills' / '.usage.json'
+                for e in PROFILES_DIR.iterdir() if e.is_dir()
+            ]
 
     if category:
         skill_dir = base_dir / category / skill_name
@@ -775,19 +814,23 @@ def api_skill_delete(profile_name):
     except OSError as e:
         return jsonify({'deleted': False, 'error': f'Errore cancellazione: {e}'}), 500
 
-    if skill_type == 'local':
-        usage_path = PROFILES_DIR / profile_name / 'skills' / '.usage.json'
+    # Pulizia usage: toglie la skill da tutti i file coinvolti (niente orfani)
+    for usage_path in usage_files:
         if usage_path.is_file():
             try:
                 with open(usage_path) as f:
                     usage = json.load(f)
+                changed = False
                 if skill_name in usage:
                     del usage[skill_name]
+                    changed = True
                 for key in list(usage.keys()):
                     if key.endswith('/' + skill_name) or key == skill_name:
                         del usage[key]
-                with open(usage_path, 'w') as f:
-                    json.dump(usage, f, indent=2)
+                        changed = True
+                if changed:
+                    with open(usage_path, 'w') as f:
+                        json.dump(usage, f, indent=2)
             except (OSError, json.JSONDecodeError):
                 pass
 
@@ -859,6 +902,26 @@ def api_kanban_archive(task_id):
         return jsonify({'archived': True, 'task_id': task_id})
     except sqlite3.Error as e:
         return jsonify({'archived': False, 'task_id': task_id, 'error': str(e)}), 500
+
+
+@app.route('/api/kanban/unarchive/<task_id>', methods=['POST'])
+def api_kanban_unarchive(task_id):
+    """POST /api/kanban/unarchive/<task_id> — rimette un task archiviato in done."""
+    try:
+        conn = sqlite3.connect(str(KANBAN_DB))
+        cur = conn.cursor()
+        cur.execute(
+            'UPDATE tasks SET status = ? WHERE id = ? AND status = ?',
+            ('done', task_id, 'archived')
+        )
+        conn.commit()
+        affected = cur.rowcount
+        conn.close()
+        if affected == 0:
+            return jsonify({'unarchived': False, 'task_id': task_id, 'error': 'task not found o non archiviato'}), 404
+        return jsonify({'unarchived': True, 'task_id': task_id})
+    except sqlite3.Error as e:
+        return jsonify({'unarchived': False, 'task_id': task_id, 'error': str(e)}), 500
 
 
 @app.route('/api/kanban/<task_id>/heartbeats')

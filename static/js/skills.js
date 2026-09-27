@@ -5,6 +5,16 @@
     // Profili espansi (preservati tra i refresh: renderProfiles ricostruisce il tbody)
     const expandedProfiles = new Set();
 
+    // Sotto-sezioni locali chiuse dall'utente (il refresh ricostruisce i <details>)
+    const closedLocal = new Set();
+    let localFilterHold = false; // filtro attivo: i toggle forzati non toccano il set
+    export function setLocalFilterHold(v) { localFilterHold = v; }
+    export function restoreLocalDetails() {
+      document.querySelectorAll('#skill-local-content details.profile-skills').forEach(det => {
+        det.open = !closedLocal.has(det.dataset.profile);
+      });
+    }
+
     // ── Errore generico di sezione (con retry) ───────────────────
     export function renderSectionError(container, label, message, retryTarget) {
       container.innerHTML =
@@ -136,7 +146,7 @@
     // ── Cancellazione skill ──────────────────────────────────────
     async function deleteSkill(profileName, skillName, category, skillType, btn, onChanged) {
       if (!await confirmDialog('Cancellare la skill "' + skillName + '"?' +
-        (skillType !== 'local' ? '\n\n⚠️ Skill ' + skillType + ' — visibile a TUTTI i profili.' : ''), {
+        (skillType !== 'local' ? '\n\n⚠️ Skill condivisa — visibile a ' + (VISIBILITY[skillType] || 'più profili') + '.' : ''), {
         title: 'Cancellare skill?', okText: 'Cancella', danger: skillType !== 'local',
       })) return;
 
@@ -172,6 +182,9 @@
         }
       }
     }
+
+    // Visibilità dei bucket condivisi (per il confirm di cancellazione)
+    const VISIBILITY = { shared: 'TUTTI i profili', frontline: 'default, ceo e teacher', primary: 'default e ceo' };
 
     // Pinned prima, poi più usate
     function sortSkills(list) {
@@ -241,17 +254,21 @@
         const list = loc && loc.list ? loc.list : [];
         const total = loc ? loc.total : 0;
 
-        const header = document.createElement('h3');
-        header.style.cssText = 'font-size:15px;font-weight:600;color:#f0f6fc;margin:20px 0 10px;display:flex;align-items:center;gap:8px;';
-        header.innerHTML = '<i class="fa-solid fa-user" style="color:#58a6ff;font-size:14px;"></i> ' + esc(p.name) +
+        // Una sotto-sezione <details> per profilo (nativo: click + tastiera gratis)
+        const det = document.createElement('details');
+        det.className = 'profile-skills';
+        det.dataset.profile = p.name;
+        det.open = !closedLocal.has(p.name);
+        const sum = document.createElement('summary');
+        sum.innerHTML = '<i class="fa-solid fa-user" style="color:#58a6ff;font-size:14px;"></i> ' + esc(p.name) +
           ' <span style="font-weight:400;color:#8b949e;font-size:13px;">&middot; ' + total + ' skill</span>';
-        contentEl.appendChild(header);
+        det.appendChild(sum);
 
         if (!list.length) {
           const emptyEl = document.createElement('div');
-          emptyEl.style.cssText = 'color:#484f58;font-size:13px;font-style:italic;padding:8px 12px;';
+          emptyEl.className = 'profile-skills-empty';
           emptyEl.textContent = '(nessuna skill locale)';
-          contentEl.appendChild(emptyEl);
+          det.appendChild(emptyEl);
         } else {
           const sorted = sortSkills(list);
           const grid = document.createElement('div');
@@ -264,33 +281,39 @@
               onOpen: s => onOpenSkill(s, p.name, 'local'),
             }));
           });
-          contentEl.appendChild(grid);
+          det.appendChild(grid);
         }
+        det.addEventListener('toggle', () => {
+          if (localFilterHold) return;
+          if (det.open) closedLocal.delete(p.name);
+          else closedLocal.add(p.name);
+        });
+        contentEl.appendChild(det);
       });
     }
 
-    // ── Render Skill Condivise (elenco) ────────────────────────────
-    export function renderSkillMatrixShared(contentEl, profiles, onOpenSkill) {
+    // ── Render matrice skill condivise/frontline (elenco unico con conteggio profili) ──
+    function renderSkillMatrix(contentEl, profiles, onOpenSkill, bucket, type) {
       const section = contentEl.closest('section');
-      const profilesWithShared = sortProfiles(profiles).filter(p =>
-        p.skills && p.skills.shared && p.skills.shared.list && p.skills.shared.list.length > 0
+      const profilesWithBucket = sortProfiles(profiles).filter(p =>
+        p.skills && p.skills[bucket] && p.skills[bucket].list && p.skills[bucket].list.length > 0
       );
 
-      if (!profilesWithShared.length) {
+      if (!profilesWithBucket.length) {
         if (section) section.style.display = 'none';  // vuota → nascosta, non box inutile
         return;
       }
       if (section) section.style.display = '';
 
-      const sharedList = sortSkills(profilesWithShared[0].skills.shared.list);
+      const bucketList = sortSkills(profilesWithBucket[0].skills[bucket].list);
 
       const profileCounts = {};
-      sharedList.forEach(sk => {
+      bucketList.forEach(sk => {
         profileCounts[sk.name] = { count: 0, profiles: [] };
       });
 
-      profilesWithShared.forEach(p => {
-        p.skills.shared.list.forEach(sk => {
+      profilesWithBucket.forEach(p => {
+        p.skills[bucket].list.forEach(sk => {
           if (profileCounts[sk.name]) {
             profileCounts[sk.name].count++;
             profileCounts[sk.name].profiles.push(p.name);
@@ -303,14 +326,14 @@
       const grid = document.createElement('div');
       grid.className = 'skill-grid';
 
-      sharedList.forEach(sk => {
+      bucketList.forEach(sk => {
         const pc = profileCounts[sk.name] || { count: 0, profiles: [] };
-        const countLabel = pc.count + '/' + profilesWithShared.length + ' profili';
+        const countLabel = pc.count + '/' + profilesWithBucket.length + ' profili';
         const card = buildSkillCard(sk, {
           icon: 'fa-solid fa-puzzle-piece',
           iconColor: '#d2a8ff',
-          delAttrs: deleteButtonAttrs('default', sk, 'shared'),
-          onOpen: s => onOpenSkill(s, '', 'shared'),
+          delAttrs: deleteButtonAttrs('default', sk, type),
+          onOpen: s => onOpenSkill(s, '', type),
         });
         // Inserisce il conteggio profili accanto al nome
         const titleRow = card.querySelector('div');
@@ -325,6 +348,16 @@
 
       contentEl.innerHTML = '';
       contentEl.appendChild(grid);
+    }
+
+    // ── Render Skill Condivise (tutti i profili) ─────────────────────
+    export function renderSkillMatrixShared(contentEl, profiles, onOpenSkill) {
+      return renderSkillMatrix(contentEl, profiles, onOpenSkill, 'shared', 'shared');
+    }
+
+    // ── Render Skill Frontline (default, ceo, teacher) ───────────────
+    export function renderSkillMatrixFrontline(contentEl, profiles, onOpenSkill) {
+      return renderSkillMatrix(contentEl, profiles, onOpenSkill, 'frontline', 'frontline');
     }
 
     // ── Render Skill Primarie (card) ─────────────────────────────
@@ -444,7 +477,7 @@
       }
 
       // Cestini delle skill (delegati: le card vengono ri-renderizzate)
-      ['skill-local-content', 'skill-shared-content', 'skill-primary-content'].forEach(id => {
+      ['skill-local-content', 'skill-shared-content', 'skill-frontline-content', 'skill-primary-content'].forEach(id => {
         const container = document.getElementById(id);
         if (!container) return;
         container.addEventListener('click', e => {

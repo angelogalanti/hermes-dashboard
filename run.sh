@@ -19,8 +19,11 @@ else
     source venv/bin/activate
 fi
 
-echo "[run] Installazione/aggiornamento dipendenze..."
-pip install -r requirements.txt -q
+if [ ! -f venv/.requirements-installed ] || [ requirements.txt -nt venv/.requirements-installed ]; then
+    echo "[run] Installazione/aggiornamento dipendenze..."
+    pip install -r requirements.txt -q
+    touch venv/.requirements-installed
+fi
 
 # ── Avvio server ──
 HOST="0.0.0.0"

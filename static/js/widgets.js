@@ -118,91 +118,59 @@
         (data._ts ? staleBadgeHTML(data._ts) : '');
     }
 
-    // ── OpenCode Usage ───────────────────────────────────────────
+    // -- OpenCode Usage compatto (pill nella barra controlli) --
+    const USAGE_SHORT = { '5-hour Usage': '5h', 'Rolling Usage': 'roll', 'Weekly Usage': 'sett', 'Monthly Usage': 'mese' };
     const WINDOW_ORDER = ['5-hour Usage', 'Rolling Usage', 'Weekly Usage', 'Monthly Usage'];
 
-    export function renderOpenCodeUsage(container, data) {
-      if (!container) return;
-      rememberTs(container, data && data._ts);
+    function usageColor(pct) {
+      if (pct >= 95) return '#f85149';
+      if (pct >= 80) return '#f0883e';
+      if (pct >= 60) return '#d29922';
+      return '#3fb950';
+    }
 
+    export function renderUsageCompact(badge, data) {
+      if (!badge) return;
+      rememberTs(badge, data && data._ts);
       if (!data || !data.accounts || !data.accounts.length) {
-        container.innerHTML = '<span class="opencode-error"><i class="fa-regular fa-circle-question"></i> OpenCode usage non disponibile</span>' +
-          '<button class="retry-btn" data-retry="slow"><i class="fas fa-rotate-right"></i> Riprova</button>';
+        badge.style.display = 'none';
+        badge.innerHTML = '';
         return;
       }
-
-      container.innerHTML = '';
-
+      badge.style.display = '';
+      const multi = data.accounts.length > 1;
+      const parts = ['<i class="fa-solid fa-bolt" style="color:#79c0ff;font-size:11px;"></i>'];
       data.accounts.forEach(acc => {
-        const section = document.createElement('div');
-        section.className = 'oc-account';
-
-        const heading = document.createElement('h3');
-        const bolt = document.createElement('i');
-        bolt.className = 'fa-solid fa-bolt';
-        heading.appendChild(bolt);
-        heading.appendChild(document.createTextNode(' ' + acc.name + ' '));
-        if (data._ts) {
-          const badge = document.createElement('span');
-          badge.className = 'stale-badge';
-          badge.title = 'Freschezza dati';
-          badge.textContent = '· ' + fmtAge(data._ts);
-          heading.appendChild(badge);
-        }
-        section.appendChild(heading);
-
-        const cardsWrap = document.createElement('div');
-        cardsWrap.className = 'oc-cards';
-
         const windows = acc.windows || {};
+        if (multi) parts.push('<span style="color:#484f58;font-size:11px;">' + esc(acc.name) + '</span>');
         WINDOW_ORDER.forEach(key => {
           const w = windows[key];
           if (!w) return;
-
-          const pct = w.pct || 0;
-          const pctInt = Math.round(pct);
-
-          let level = 'low';
-          if (pct >= 95)      level = 'critical';
-          else if (pct >= 80) level = 'high';
-          else if (pct >= 60) level = 'medium';
-
-          const card = document.createElement('div');
-          card.className = 'oc-card';
-          card.innerHTML =
-            '<div class="oc-card-label">' + esc(key) + '</div>' +
-            '<div class="oc-card-pct ' + level + '">' + pctInt + '%</div>' +
-            '<div class="oc-bar"><div class="oc-bar-fill ' + level + '" style="width:' + pctInt + '%"></div></div>' +
-            '<div class="oc-card-reset"><i class="fa-regular fa-clock"></i> ' + esc(w.resets_in || '—') + '</div>';
-          cardsWrap.appendChild(card);
+          const pct = Math.round(w.pct || 0);
+          const label = USAGE_SHORT[key] || key;
+          parts.push('<span class="credit-service" title="' + esc(key + ' - ' + acc.name + ' - ' + (w.resets_in || '')) + '">' +
+            '<span class="status-dot" style="background:' + usageColor(pct) + '"></span>' +
+            esc(label) + ' ' + pct + '%' +
+            '</span>');
         });
-
-        section.appendChild(cardsWrap);
-        container.appendChild(section);
       });
+      badge.innerHTML = parts.join('') + (data._ts ? staleBadgeHTML(data._ts) : '');
     }
 
-    export function renderUsageSkeleton(container) {
-      if (!container) return;
-      container.innerHTML =
-        '<div class="oc-account"><h3><i class="fa-solid fa-bolt"></i> OpenCode</h3>' +
-        '<div class="oc-cards">' +
-        '<div class="oc-card"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:40%"></div></div>' +
-        '<div class="oc-card"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:40%"></div></div>' +
-        '<div class="oc-card"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:40%"></div></div>' +
-        '</div></div>';
+    export function renderUsageCompactSkeleton(badge) {
+      if (!badge) return;
+      badge.style.display = '';
+      badge.innerHTML = '<span class="credit-service"><span class="status-dot" style="background:#484f58"></span>usage ...</span>';
     }
 
-    export function renderUsageError(container, message) {
-      if (!container) return;
-      if (container.dataset.ts) {
-        // Abbiamo dati vecchi: li teniamo e segnaliamo solo il mancato update
-        markStale(container);
+    export function renderUsageCompactError(badge, message) {
+      if (!badge) return;
+      if (badge.dataset.ts) {
+        markStale(badge);
         return;
       }
-      container.innerHTML =
-        '<div class="section-error">' +
-        '<span class="opencode-error"><i class="fa-regular fa-circle-question"></i> OpenCode usage non disponibile: ' + esc(message) + '</span>' +
-        '<button class="retry-btn" data-retry="slow"><i class="fas fa-rotate-right"></i> Riprova</button>' +
-        '</div>';
+      badge.style.display = '';
+      badge.innerHTML =
+        '<span class="credit-service"><span class="status-dot" style="background:#484f58"></span>usage n/d</span>' +
+        '<button class="retry-btn" data-retry="slow" title="' + esc(message) + '"><i class="fas fa-rotate-right"></i></button>';
     }

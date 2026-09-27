@@ -1051,98 +1051,6 @@
       font-style: italic;
     }
 
-    /* ── OpenCode Usage Widget ──────────── */
-    .opencode-section {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      margin-top: 16px;
-    }
-    .oc-account {
-      flex: 1;
-      min-width: 280px;
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      padding: 14px 16px;
-    }
-    .oc-account h3 {
-      font-size: 13px;
-      font-weight: 600;
-      color: #8b949e;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 10px;
-    }
-    .oc-account h3 i {
-      color: #58a6ff;
-      margin-right: 6px;
-      font-size: 12px;
-    }
-    .oc-cards {
-      display: flex;
-      gap: 10px;
-    }
-    .oc-card {
-      flex: 1;
-      min-width: 0;
-      background: #161b22;
-      border: 1px solid #21262d;
-      border-radius: 6px;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .oc-card-label {
-      font-size: 11px;
-      color: #8b949e;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-    }
-    .oc-card-pct {
-      font-size: 22px;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-    }
-    .oc-card-pct.low    { color: #3fb950; }
-    .oc-card-pct.medium { color: #d29922; }
-    .oc-card-pct.high   { color: #f0883e; }
-    .oc-card-pct.critical { color: #f85149; }
-    .oc-bar {
-      height: 6px;
-      background: #21262d;
-      border-radius: 3px;
-      overflow: hidden;
-    }
-    .oc-bar-fill {
-      height: 100%;
-      border-radius: 3px;
-      transition: width 0.4s ease;
-    }
-    .oc-bar-fill.low    { background: #3fb950; }
-    .oc-bar-fill.medium { background: #d29922; }
-    .oc-bar-fill.high   { background: #f0883e; }
-    .oc-bar-fill.critical { background: #f85149; }
-    .oc-card-reset {
-      font-size: 11px;
-      color: #484f58;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .oc-card-reset i { font-size: 9px; }
-    .opencode-error {
-      font-size: 12px;
-      color: #8b949e;
-      font-style: italic;
-    }
-    .opencode-loading {
-      font-size: 12px;
-      color: #484f58;
-    }
-
     /* ── Skeleton loader ──────────── */
     .skeleton {
       pointer-events: none;
@@ -1270,6 +1178,43 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 8px;
+    }
+
+    /* ── Sotto-sezioni skill locali (un <details> per profilo) ── */
+    .profile-skills {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      padding: 0 14px;
+    }
+    .profile-skills > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: #f0f6fc;
+    }
+    .profile-skills > summary::-webkit-details-marker { display: none; }
+    .profile-skills > summary::after {
+      content: '▸';
+      margin-left: auto;
+      font-size: 12px;
+      color: #8b949e;
+      transition: transform 0.2s;
+    }
+    .profile-skills[open] > summary::after { transform: rotate(90deg); }
+    .profile-skills > summary:focus-visible { outline: 2px solid #58a6ff; outline-offset: 2px; border-radius: 4px; }
+    .profile-skills .skill-grid { padding-bottom: 14px; }
+    .profile-skills-empty {
+      color: #484f58;
+      font-size: 13px;
+      font-style: italic;
+      padding: 0 0 12px;
     }
 
     /* ── Filtro ricerca ─── */

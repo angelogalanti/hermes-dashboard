@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-"""Scrape OpenCode workspace usage from opencode.ai.
+"""OpenCode Go usage via official API (stesso metodo di resetwatch/probe.py).
 
-Reads 1 account from env vars (OPENCODE_ACCOUNT2_{COOKIE,WORKSPACE}),
-curls the /go page of the workspace, parses usage percentages from the
-data-slot HTML attributes, and writes a JSON summary to disk.
+GET https://opencode.ai/zen/go/v1/usage with Bearer OPENCODE_GO_API_KEY.
+Niente scraping, niente cookie. Output invariato per il widget dashboard:
+{accounts: [{name, windows: {label: {pct, resets_in}}]}.
 
 Cache TTL: 300s (5 min). Pass --force to bypass cache.
-On scrape failure the last valid data for that account is preserved.
+On API failure the last valid data is preserved.
 """
 
 import json
 import os
-import re
 import sys
 import time
 import urllib.error
 import urllib.request
-from html.parser import HTMLParser
+from datetime import datetime, timezone
 from pathlib import Path
 
 # ── Paths ───────────────────────────────────────────────────────────
@@ -25,14 +24,17 @@ CACHE_FILE = Path.home() / '.hermes' / 'dashboard-data' / 'opencode-usage.json'
 LOG_FILE = Path.home() / '.hermes' / 'dashboard-data' / 'opencode-usage.log'
 ENV_FILE = Path.home() / '.hermes' / '.env'
 CACHE_TTL = 300       # 5 minuti
-TIMEOUT = 15          # secondi per ogni HTTP request
+TIMEOUT = 10          # secondi per la chiamata API
 
-# ── Account definitions ─────────────────────────────────────────────
-# (display_name, cookie_env_key, workspace_env_key)
+API_URL = 'https://opencode.ai/zen/go/v1/usage'
+ACCOUNT_NAME = 'Account A'
 
-ACCOUNTS = [
-    ("Account A", "OPENCODE_ACCOUNT2_COOKIE", "OPENCODE_ACCOUNT2_WORKSPACE"),
-]
+# Chiave API → etichetta dashboard (stesse del vecchio scrape)
+WINDOWS = (
+    ('rolling', '5-hour Usage'),
+    ('weekly', 'Weekly Usage'),
+    ('monthly', 'Monthly Usage'),
+)
 
 
 # ── Logger ──────────────────────────────────────────────────────────
@@ -107,140 +109,74 @@ def _read_last_valid() -> dict | None:
         return None
 
 
-# ── HTML Parser ─────────────────────────────────────────────────────
+# ── Formattazione ───────────────────────────────────────────────────
 
-class UsageHTMLParser(HTMLParser):
-    """Estrae coppie (data-slot name, text content) dall'HTML.
-
-    Funziona anche con elementi annidati: se un tag child (es. <span>)
-    è dentro un elemento con data-slot, ne eredita il contesto.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.slots: list[tuple[str, str]] = []
-        self._slot_stack: list[str | None] = [None]  # root context
-
-    def handle_starttag(self, tag, attrs):
-        attrs_dict = dict(attrs)
-        slot_name = attrs_dict.get('data-slot')
-        if slot_name is not None:
-            self._slot_stack.append(slot_name)
-        else:
-            # Eredita il contesto dal genitore
-            self._slot_stack.append(self._slot_stack[-1])
-
-    def handle_endtag(self, tag):
-        if len(self._slot_stack) > 1:
-            self._slot_stack.pop()
-
-    def handle_data(self, data):
-        text = data.strip()
-        if not text:
-            return
-        top = self._slot_stack[-1]
-        if top is not None:
-            # Accumulate text for same slot (streaming framework splits text)
-            if self.slots and self.slots[-1][0] == top:
-                prev_name, prev_text = self.slots[-1]
-                self.slots[-1] = (prev_name, prev_text + " " + text)
-            else:
-                self.slots.append((top, text))
+def _fmt_resets(resets_at: str | None) -> str:
+    """'2026-09-28T00:00:00.000Z' → 'Resets in 2 days 14 hours' (stile vecchio scrape)."""
+    if not resets_at:
+        return '—'
+    try:
+        dt = datetime.fromisoformat(str(resets_at).replace('Z', '+00:00'))
+        delta = (dt - datetime.now(timezone.utc)).total_seconds()
+        if delta <= 0:
+            return 'Resets soon'
+        days, rem = divmod(int(delta), 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes = rem // 60
+        if days > 0:
+            return f'Resets in {days} day{"s" if days != 1 else ""} {hours} hour{"s" if hours != 1 else ""}'
+        if hours > 0:
+            return f'Resets in {hours} hour{"s" if hours != 1 else ""} {minutes} minute{"s" if minutes != 1 else ""}'
+        return f'Resets in {minutes} minute{"s" if minutes != 1 else ""}'
+    except (ValueError, TypeError):
+        return '—'
 
 
-def parse_usage(html: str) -> dict:
-    """Parse HTML and return usage windows.
+# ── API ─────────────────────────────────────────────────────────────
 
-    Groups consecutive data-slot elements into windows by cycling
-    through usage-label → usage-value → reset-time.
-
-    Returns:
-        {label: {"pct": float, "resets_in": str}, ...}
-    """
-    parser = UsageHTMLParser()
-    parser.feed(html)
-
-    slots = parser.slots
-
-    windows: dict = {}
-    label: str | None = None
-    pct_value: float = 0
-
-    for name, text in slots:
-        if name == 'usage-label':
-            label = text
-        elif name == 'usage-value':
-            pct_str = re.sub(r'[^0-9.]', '', text)
-            try:
-                pct_value = round(float(pct_str), 1)
-            except ValueError:
-                pct_value = 0
-        elif name == 'reset-time':
-            if label is not None:
-                windows[label] = {'pct': pct_value, 'resets_in': text}
-                label = None
-                pct_value = 0
-
-    return windows
-
-
-# ── Scrape ──────────────────────────────────────────────────────────
-
-def scrape_account(cookie: str, workspace: str) -> dict | None:
-    """Scrape one OpenCode /go page and return windows dict.
-
-    Returns None on any error (HTTP, network, parse failure).
-    Prints errors to stderr for cron logging.
-    """
-    url = f'https://opencode.ai/workspace/{workspace}/go'
-    req = urllib.request.Request(url)
-    req.add_header(
-        'User-Agent',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/131.0.0.0 Safari/537.36',
-    )
-    req.add_header('Cookie', f'auth={cookie}')
-
+def fetch_usage(api_key: str) -> dict | None:
+    """GET /zen/go/v1/usage → {label: {pct, resets_in}}. None on error."""
+    req = urllib.request.Request(API_URL, headers={
+        'Authorization': f'Bearer {api_key}',
+        'Accept': 'application/json',
+        'User-Agent': 'hermes-dashboard',
+    })
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-            html = resp.read().decode('utf-8', errors='replace')
-            _log(f'[scrape {workspace[:12]}...] HTTP {resp.status} {len(html)} bytes')
+            payload = json.loads(resp.read().decode())
+            _log(f'[api] HTTP {resp.status}')
     except urllib.error.HTTPError as e:
-        _log(f'[scrape {workspace[:12]}...] HTTP {e.code} {e.reason}')
+        _log(f'[api] HTTP {e.code} {e.reason}')
+        return None
+    except (urllib.error.URLError, OSError, json.JSONDecodeError, ValueError) as e:
+        _log(f'[api] error: {e}')
+        return None
+
+    usage = payload.get('usage') if isinstance(payload, dict) else None
+    if not isinstance(usage, dict):
+        _log('[api] missing usage dict')
+        return None
+
+    windows: dict = {}
+    for api_field, label in WINDOWS:
+        item = usage.get(api_field)
+        if not isinstance(item, dict):
+            continue
         try:
-            body = e.read().decode(errors='replace')[:200]
-            if body:
-                _log(f'[scrape] response: {body}')
-        except Exception:
-            pass
-        return None
-    except urllib.error.URLError as e:
-        _log(f'[scrape {workspace[:12]}...] URLError: {e.reason}')
-        return None
-    except OSError as e:
-        _log(f'[scrape {workspace[:12]}...] OSError: {e}')
-        return None
-
-    if not html:
-        _log(f'[scrape {workspace[:12]}...] Empty response')
-        return None
-
-    windows = parse_usage(html)
-    if not windows:
-        _log(f'[scrape {workspace[:12]}...] No data-slot elements found in HTML')
-        return None
-
-    return {'windows': windows}
+            pct = round(float(item.get('percent', 0)), 1)
+        except (TypeError, ValueError):
+            continue
+        windows[label] = {'pct': pct, 'resets_in': _fmt_resets(item.get('resetsAt'))}
+    return windows or None
 
 
 # ── Main entry ──────────────────────────────────────────────────────
 
 def run(force: bool = False) -> dict:
-    """Run scraper or return cached data.
+    """Run fetcher or return cached data.
 
     Args:
-        force: True → ignora cache e rifà tutte le chiamate.
+        force: True → ignora cache e rifà la chiamata.
 
     Returns:
         dict con accounts + errors (e _ts per cache).
@@ -248,61 +184,32 @@ def run(force: bool = False) -> dict:
     if not force:
         cached = _read_cache()
         if cached:
-            _log(f'Cache HIT — returning cached data from _ts={cached.get("_ts", "?")}')
             return cached
 
-    _log(f'run(force={force}) — starting scrape')
     env_file = _load_env()
     last_valid = _read_last_valid()
+    api_key = _get_env('OPENCODE_GO_API_KEY', env_file)
 
-    accounts_data: list[dict] = []
     errors: list[str] = []
-    used_fallback = False
+    if not api_key:
+        errors.append(f'{ACCOUNT_NAME}: missing OPENCODE_GO_API_KEY')
+        _log(f'{ACCOUNT_NAME}: missing OPENCODE_GO_API_KEY')
+        if last_valid:
+            return last_valid
+        return {'accounts': [], 'errors': errors}
 
-    for name, cookie_key, workspace_key in ACCOUNTS:
-        cookie = _get_env(cookie_key, env_file)
-        workspace = _get_env(workspace_key, env_file)
-
-        if not cookie or not workspace:
-            errors.append(f'{name}: missing {cookie_key} or {workspace_key}')
-            _log(f'{name}: missing {cookie_key} or {workspace_key}')
-            continue
-
-        result = scrape_account(cookie, workspace)
-        if result is not None:
-            accounts_data.append({'name': name, **result})
-            _log(f'{name}: scraped OK — {result.get("windows", {})}')
-        else:
-            errors.append(f'{name}: scrape failed or no data-slot elements found')
-            _log(f'{name}: scrape FAILED — using fallback if available')
-            used_fallback = True
-            # Fallback: keep last valid data for this account
-            if last_valid:
-                for acc in last_valid.get('accounts', []):
-                    if acc.get('name') == name:
-                        accounts_data.append(acc)
-                        _log(f'{name}: fallback used — pct={acc.get("windows", {}).get("Rolling Usage", {}).get("pct", "?")}')
-                        break
-                else:
-                    _log(f'{name}: fallback NOT found in last_valid (name mismatch?)')
-            else:
-                _log(f'{name}: no last_valid available')
-
-    result: dict = {'accounts': accounts_data}
-
-    # If all accounts failed and we have nothing at all, return last valid
-    if not accounts_data and last_valid:
-        _log(f'All accounts failed — returning last_valid (accounts={len(last_valid.get("accounts", []))})')
-        return last_valid
-
-    # Only write cache if ALL data is fresh (no fallback used)
-    if accounts_data and not used_fallback:
-        _log(f'Writing cache — {len(accounts_data)} accounts fresh')
+    windows = fetch_usage(api_key)
+    if windows is not None:
+        result = {'accounts': [{'name': ACCOUNT_NAME, 'windows': windows}]}
         _write_cache(result)
-    elif accounts_data and used_fallback:
-        _log(f'NOT writing cache — used_fallback=True, keeping existing cache')
+        _log(f'{ACCOUNT_NAME}: api OK')
+        return result
 
-    return result
+    errors.append(f'{ACCOUNT_NAME}: api failed')
+    if last_valid:
+        _log(f'{ACCOUNT_NAME}: api FAILED — using fallback')
+        return last_valid
+    return {'accounts': [], 'errors': errors}
 
 
 if __name__ == '__main__':

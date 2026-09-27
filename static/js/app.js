@@ -14,14 +14,15 @@
     } from './kanban.js';
     import {
       renderProfiles, renderProfilesSkeleton, renderProfilesError,
-      renderSkillListByProfile, renderSkillMatrixShared,
+      renderSkillListByProfile, renderSkillMatrixShared, renderSkillMatrixFrontline,
       renderSkillPrimary, renderSkillBundles, renderSectionError,
+      setLocalFilterHold, restoreLocalDetails,
       initSkills,
     } from './skills.js';
     import {
-      renderCredits, renderOpenCodeUsage,
+      renderCredits, renderUsageCompact,
       renderGatewayPill, renderHealthPill,
-      renderUsageSkeleton, renderUsageError, markStale,
+      renderUsageCompactSkeleton, renderUsageCompactError, markStale,
     } from './widgets.js';
     import {
       openSkillModal, openSoulModal, openAgentsModal,
@@ -39,10 +40,11 @@
     const healthBtn    = document.getElementById('health-btn');
     const skillLocalContent   = document.getElementById('skill-local-content');
     const skillSharedContent  = document.getElementById('skill-shared-content');
+    const skillFrontlineContent = document.getElementById('skill-frontline-content');
     const skillPrimaryContent = document.getElementById('skill-primary-content');
     const skillBundlesContent = document.getElementById('skill-bundles-content');
     const creditsBadge = document.getElementById('credits-badge');
-    const usageContainer = document.getElementById('opencode-usage');
+    const usageBadge = document.getElementById('usage-badge');
     const gatewayPill = document.getElementById('gateway-pill');
     const healthPill = document.getElementById('health-pill');
 
@@ -69,6 +71,7 @@
         renderGatewayPill(gatewayPill, data.profiles || []);
         renderSkillListByProfile(skillLocalContent, data.profiles || [], openSkillModal);
         renderSkillMatrixShared(skillSharedContent, data.profiles || [], openSkillModal);
+        renderSkillMatrixFrontline(skillFrontlineContent, data.profiles || [], openSkillModal);
         renderSkillPrimary(skillPrimaryContent, data.profiles || [], openSkillModal);
         hasData.fast = true;
         touchLastUpdate();
@@ -81,7 +84,8 @@
           renderProfilesError(profilesBody, err.message);
           renderSectionError(skillLocalContent, 'Skill locali', err.message, 'fast');
           renderSectionError(skillSharedContent, 'Skill condivise', err.message, 'fast');
-          renderSectionError(skillPrimaryContent, 'Skill primarie', err.message, 'fast');
+          renderSectionError(skillFrontlineContent, 'Skill frontline', err.message, 'fast');
+          renderSectionError(skillPrimaryContent, 'Skill generalist', err.message, 'fast');
         }
       } finally {
         refreshBtn.classList.remove('loading');
@@ -133,14 +137,17 @@
         console.error('credits:', creditsRes.reason);
       }
 
-      // Usage
+      // Usage (pill compatta nella barra controlli)
       if (usageRes.status === 'fulfilled') {
         if (usageRes.value !== NOT_MODIFIED) {
-          renderOpenCodeUsage(usageContainer, usageRes.value);
+          renderUsageCompact(usageBadge, usageRes.value);
           hasData.usage = true;
         }
+      } else if (!hasData.usage) {
+        renderUsageCompactError(usageBadge, usageRes.reason.message);
       } else {
-        renderUsageError(usageContainer, usageRes.reason.message);
+        markStale(usageBadge);
+        console.error('usage:', usageRes.reason);
       }
       const fi2 = document.getElementById('filter-input');
       if (fi2 && fi2.value) fi2.dispatchEvent(new Event('input')); // re-applica filtro ai nodi ri-renderizzati
@@ -214,16 +221,15 @@
           row.style.display = show ? '' : 'none';
           if (q && show) n++;
         });
-        // Nascondi contenitori svuotati dal filtro (header profilo, grid, colonne kanban)
-        document.querySelectorAll('#skill-local-content h3').forEach(h => {
-          const grid = h.nextElementSibling;
-          const anyVisible = grid && [...grid.children].some(c => c.style.display !== 'none');
-          h.style.display = !q || anyVisible ? '' : 'none';
-          if (grid) grid.style.display = !q || anyVisible ? '' : 'none';
+        // Sotto-sezioni locali per profilo (<details>): nascondi le svuotate,
+        // apri quelle con match; a filtro vuoto ripristina lo stato utente
+        setLocalFilterHold(!!q);
+        document.querySelectorAll('#skill-local-content details.profile-skills').forEach(det => {
+          const vis = [...det.querySelectorAll('.skill-card')].filter(c => c.style.display !== 'none');
+          det.style.display = !q || vis.length ? '' : 'none';
+          if (q && vis.length) det.open = true;
         });
-        document.querySelectorAll('#skill-local-content > div:not(.skill-grid)').forEach(el => {
-          if (el.textContent.includes('nessuna skill locale')) el.style.display = !q ? '' : 'none';
-        });
+        if (!q) restoreLocalDetails();
         document.querySelectorAll('#kanban-board .kanban-column').forEach(col => {
           const cards = [...col.querySelectorAll('.kanban-card')].filter(c => c.style.display !== 'none');
           const emptyEl = col.querySelector('.kanban-column-empty');
@@ -231,7 +237,7 @@
           if (countEl) countEl.textContent = q ? cards.length : col.querySelectorAll('.kanban-card').length;
           if (emptyEl && q) emptyEl.style.display = cards.length ? 'none' : 'block';
         });
-        document.querySelectorAll('#skill-bundles-content, #skill-shared-content, #skill-primary-content').forEach(box => {
+        document.querySelectorAll('#skill-bundles-content, #skill-shared-content, #skill-frontline-content, #skill-primary-content').forEach(box => {
           const anyVisible = [...box.querySelectorAll('.skill-card, .skill-bundle-card')].some(c => c.style.display !== 'none');
           const section = box.closest('section');
           if (!section) return;
@@ -296,7 +302,7 @@
     // Skeleton al primo avvio, poi doppio refresh in parallelo
     renderKanbanSkeleton(kanbanBoard);
     renderProfilesSkeleton(profilesBody);
-    renderUsageSkeleton(usageContainer);
+    renderUsageCompactSkeleton(usageBadge);
     renderHealthPill(healthPill, null);
 
     let fastTimer = null;

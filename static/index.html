@@ -28,16 +28,11 @@
       <div class="controls-status">
         <span id="gateway-pill" class="status-pill" title="Stato gateway"></span>
         <span id="health-pill" class="status-pill" title="Stato provider"></span>
+        <span id="usage-badge" class="credits-badge" title="Utilizzo OpenCode"></span>
         <span id="credits-badge" class="credits-badge"></span>
         <span id="last-update" aria-live="polite"></span>
       </div>
     </div>
-
-    <!-- Sezione OpenCode Usage -->
-    <section id="usage-section">
-      <h2><i class="fa-solid fa-bolt"></i> OpenCode Usage</h2>
-      <div id="opencode-usage" class="opencode-section"></div>
-    </section>
 
     <!-- Sezione Kanban (Board) — ALTO -->
     <section id="kanban-section">
@@ -85,9 +80,18 @@
       <div id="skill-shared-content"></div>
     </section>
 
-    <!-- Sezione Skill Primarie (solo default + ceo) -->
+    <!-- Sezione Skill Frontline (default, ceo, teacher) -->
+    <section id="skill-frontline-section">
+      <h2><i class="fa-solid fa-bolt"></i> Skill Frontline</h2>
+      <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
+        Skill operative per i profili che parlano con l'utente (<strong>default</strong>, <strong>ceo</strong>, <strong>teacher</strong>) &mdash; non visibili ai worker.
+      </p>
+      <div id="skill-frontline-content"></div>
+    </section>
+
+    <!-- Sezione Skill Generalist (solo default + ceo) -->
     <section id="skill-primary-section">
-      <h2><i class="fa-solid fa-crown"></i> Skill Primarie</h2>
+      <h2><i class="fa-solid fa-crown"></i> Skill Generalist</h2>
       <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
         <i class="fa-solid fa-info-circle" style="color:#d29922;"></i> Disponibili solo per <strong>default</strong> e <strong>ceo</strong>.
       </p>
