@@ -1,5 +1,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html { color-scheme: dark; }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       background: #0d1117;
@@ -36,8 +38,16 @@
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 20px;
+      margin-bottom: 28px;
       flex-wrap: wrap;
+      position: sticky;
+      top: 10px;
+      z-index: 50;
+      background: rgba(22, 27, 34, 0.95);
+      backdrop-filter: blur(8px);
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px 16px;
     }
     .controls-actions,
     .controls-status {
@@ -46,6 +56,7 @@
       gap: 12px;
       flex-wrap: wrap;
     }
+    .controls-actions { flex: 1 1 auto; min-width: 0; }
     .controls button {
       background: #21262d;
       border: 1px solid #30363d;
@@ -58,6 +69,21 @@
       align-items: center;
       gap: 8px;
       transition: background 0.2s, border-color 0.2s;
+      touch-action: manipulation;
+    }
+    /* Bottone icon-only (refresh): compatto */
+    .controls button.icon-btn {
+      padding: 8px 11px;
+    }
+    /* Azione rara (health): peso secondario */
+    .controls button.btn-secondary {
+      background: transparent;
+      font-size: 13px;
+      padding: 7px 12px;
+    }
+    .controls button:focus-visible {
+      outline: 2px solid #58a6ff;
+      outline-offset: 2px;
     }
     .controls button:hover { background: #30363d; border-color: #58a6ff; }
     .controls button:active { background: #1f2937; }
@@ -132,6 +158,22 @@
       gap: 10px;
     }
     section h2 i { color: #58a6ff; }
+    /* Sezioni collassabili: click sull'h2 */
+    section h2[role="button"] { cursor: pointer; user-select: none; }
+    section h2[role="button"]:focus-visible {
+      outline: 2px solid #58a6ff;
+      outline-offset: 4px;
+      border-radius: 4px;
+    }
+    section h2 .section-toggle {
+      margin-left: auto;
+      font-size: 14px;
+      color: #484f58;
+      transition: transform 0.2s;
+    }
+    section.collapsed h2 .section-toggle { transform: rotate(-90deg); }
+    section.collapsed h2 { margin-bottom: 0; }
+    section.collapsed > :not(h2) { display: none; }
 
     /* ── Table (Profili) ────────────── */
     .table-wrapper {
@@ -191,16 +233,6 @@
     }
     .profile-name i.fa-user { color: #58a6ff; }
     .profile-name .no-expand { width: 14px; display: inline-block; }
-
-    .platform-icons {
-      display: flex;
-      gap: 8px;
-      font-size: 16px;
-    }
-    .platform-icons i { color: #8b949e; }
-    .platform-icons i.fa-telegram { color: #2aabee; }
-    .platform-icons i.fa-discord { color: #5865f2; }
-    .platform-icons i.fa-whatsapp { color: #25d366; }
 
     .model-cell {
       font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
@@ -394,6 +426,8 @@
       opacity: 1;
       visibility: visible;
     }
+    /* Blocca lo scroll della pagina finché un modal è aperto (tutti usano .skill-modal-overlay) */
+    body:has(.skill-modal-overlay.open) { overflow: hidden; }
     .skill-modal {
       background: #0d1117;
       border: 1px solid #30363d;
@@ -579,9 +613,6 @@
     .kanban-column.col-empty {
       flex: 0.4 1 0;
     }
-    .kanban-column.col-hidden {
-      display: none;
-    }
 
     .kanban-column-header {
       padding: 10px 12px;
@@ -602,7 +633,6 @@
     }
 
     /* Column header colors */
-    .col-triage  .kanban-column-header { background: #1c2128; color: #8b949e; }
     .col-todo    .kanban-column-header { background: #1a3a2a; color: #3fb950; }
     .col-ready   .kanban-column-header { background: #3a2a1a; color: #d29922; }
     .col-running .kanban-column-header { background: #1f3a5f; color: #58a6ff; }
@@ -628,6 +658,15 @@
     .kanban-card:hover {
       border-color: #58a6ff;
       box-shadow: 0 2px 8px rgba(88,166,255,0.12);
+    }
+    .kanban-card:focus-visible,
+    .skill-card:focus-visible,
+    .skill-bundle-card:focus-visible {
+      outline: 2px solid #58a6ff;
+      outline-offset: 2px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
     }
 
     .kanban-card-title {
@@ -692,6 +731,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
       margin-top: 6px;
       font-size: 11px;
       gap: 6px;
@@ -790,7 +830,9 @@
     @media (max-width: 768px) {
       .container { padding: 6px 10px; }
       section { padding: 14px; }
-      .kanban-column { flex: 1 1 0; min-width: 120px; }
+      .kanban-board { flex-direction: column; overflow-x: visible; }
+      .kanban-column { flex: 1 1 0; min-width: 0; }
+      .kanban-card .kanban-card-archive { opacity: 1; } /* no hover su touch: archivio sempre visibile */
       .skill-detail-row td { padding-left: 20px; }
       .skill-item { font-size: 11px; padding: 2px 8px; }
       /* Stack table rows on small screens */
@@ -927,6 +969,21 @@
       border: 1px solid #30363d;
       border-radius: 6px;
     }
+    .hb-task-summary {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 13px;
+      color: #c9d1d9;
+      margin-bottom: 12px;
+      padding: 10px 14px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-left: 3px solid #58a6ff;
+      border-radius: 6px;
+    }
+    .hb-task-summary strong { color: #f0f6fc; }
+    .hb-task-summary span { font-size: 12px; color: #8b949e; }
 
     /* ── Heartbeat timeline ───────────────── */
     .hb-timeline {
@@ -1145,6 +1202,35 @@
     }
     .retry-btn i { color: #58a6ff; }
 
+    /* ── Confirm dialog (stesso tema, niente nativi) ── */
+    #confirm-message { white-space: pre-wrap; }
+    .confirm-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .confirm-btn-cancel, .confirm-btn-ok {
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      font-size: 13px;
+      padding: 6px 14px;
+      cursor: pointer;
+    }
+    .confirm-btn-cancel { background: #21262d; color: #c9d1d9; }
+    .confirm-btn-cancel:hover { background: #30363d; }
+    .confirm-btn-ok { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+    .confirm-btn-ok:hover { background: #388bfd; }
+    .confirm-btn-ok.danger { background: #da3633; border-color: #da3633; }
+    .confirm-btn-ok.danger:hover { background: #f85149; }
+
+    /* ── Conteggio filtro ── */
+    .filter-count {
+      font-size: 12px;
+      color: #484f58;
+      white-space: nowrap;
+    }
+
     /* ── Badge freschezza dati ──────────── */
     .stale-badge {
       font-weight: 400;
@@ -1156,3 +1242,47 @@
     .stale-badge.warn {
       color: #d29922;
     }
+
+    /* ── Status pill (gateway / health in barra) ── */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #8b949e;
+      padding: 4px 10px;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      background: #0d1117;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .status-pill:empty { display: none; }
+    .status-pill .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Griglia skill condivisa (una classe, non inline) ── */
+    .skill-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 8px;
+    }
+
+    /* ── Filtro ricerca ─── */
+    .filter-input {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      min-width: 160px;
+      flex: 1 1 240px;
+      max-width: 480px;
+    }
+    .filter-input:focus-visible { outline: none; border-color: #58a6ff; }
+    .filter-input::placeholder { color: #484f58; }

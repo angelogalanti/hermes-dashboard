@@ -1,11 +1,9 @@
     // ── skills.js — profili, skill locali/condivise/primarie, bundle ──
     import { esc, sortProfiles, timeAgo } from './utils.js';
+    import { confirmDialog, alertDialog } from './modals.js';
 
-    const PLATFORM_ICONS = {
-      telegram: 'fa-brands fa-telegram',
-      discord:  'fa-brands fa-discord',
-      whatsapp: 'fa-brands fa-whatsapp',
-    };
+    // Profili espansi (preservati tra i refresh: renderProfiles ricostruisce il tbody)
+    const expandedProfiles = new Set();
 
     // ── Errore generico di sezione (con retry) ───────────────────
     export function renderSectionError(container, label, message, retryTarget) {
@@ -21,7 +19,7 @@
     export function renderProfiles(tbody, profiles) {
       if (!profiles.length) {
         tbody.innerHTML =
-          '<tr><td colspan="8">' +
+          '<tr><td colspan="5">' +
           '<div class="empty-state"><i class="fas fa-users-slash"></i>Nessun profilo configurato</div>' +
           '</td></tr>';
         return;
@@ -32,21 +30,6 @@
       sorted.forEach(p => {
         const safeName = p.name;
 
-        const gatewayOn  = p.gateway === 'running' || p.gateway === 'connected';
-        const gatewayDot = '<i class="fa-solid fa-circle" style="color:' +
-          (gatewayOn ? '#3fb950' : '#f85149') + '; font-size:12px;"></i>';
-
-        const healthColor = p.health === 'ok' ? '#3fb950' :
-          p.health === 'error' ? '#f85149' : '#484f58';
-        const healthDot = '<i class="fa-solid fa-circle" title="' + esc(p.health || 'unknown') + '" style="color:' + healthColor + '; font-size:12px;"></i>';
-
-        const platforms = (p.platforms || []).map(pl => {
-          const icon = PLATFORM_ICONS[pl.toLowerCase()];
-          return icon
-            ? '<span title="' + esc(pl) + '"><i class="' + icon + '"></i></span>'
-            : '<span title="' + esc(pl) + '"><i class="fa-solid fa-plug"></i></span>';
-        }).join('') || '<span style="color:#484f58;">&mdash;</span>';
-
         const hasSkills = p.skills && p.skills.total > 0;
         const totalSkills = p.skills ? p.skills.total : 0;
         const skillBadge = hasSkills
@@ -54,7 +37,7 @@
           : '<span class="skill-badge" style="color:#484f58;">&mdash;</span>';
 
         const expandIcon = hasSkills
-          ? '<i class="fa-solid fa-chevron-right expand-icon" data-expand-icon="' + esc(safeName) + '"></i>'
+          ? '<i class="fa-solid fa-chevron-right expand-icon' + (expandedProfiles.has(safeName) ? ' expanded' : '') + '" data-expand-icon="' + esc(safeName) + '"></i>'
           : '<span class="no-expand"></span>';
 
         const row = document.createElement('tr');
@@ -67,9 +50,6 @@
         }
         row.innerHTML =
           '<td data-label="Profilo"><div class="profile-name">' + expandIcon + ' <i class="fa-solid fa-user"></i> ' + esc(safeName) + '</div></td>' +
-          '<td data-label="Gateway">' + gatewayDot + '</td>' +
-          '<td data-label="Health">' + healthDot + '</td>' +
-          '<td data-label="Piattaforme"><div class="platform-icons">' + platforms + '</div></td>' +
           '<td data-label="Modello"><span class="model-cell">' + esc(p.model || '-') + '</span></td>' +
           '<td data-label="Provider"><span class="provider-cell">' + esc(p.provider || '-') + '</span></td>' +
           '<td data-label="SOUL/AGENTS" class="soul-agents-cell">' + renderSoulAgents(safeName, p) + '</td>' +
@@ -100,9 +80,10 @@
           const detail = document.createElement('tr');
           detail.className = 'skill-detail-row';
           detail.id = 'skills-' + safeName;
-          detail.style.display = 'none';
+          // Ripristina espansione precedente (il refresh ricostruisce il tbody)
+          detail.style.display = expandedProfiles.has(safeName) ? 'table-row' : 'none';
           detail.innerHTML =
-            '<td colspan="8">' +
+            '<td colspan="5">' +
             '<div class="skill-title"><i class="fa-solid fa-puzzle-piece"></i> Skill</div>' +
             '<div class="skill-list">' + skillItems + '</div>' +
             '</td>';
@@ -115,14 +96,14 @@
       tbody.innerHTML = '';
       for (let i = 0; i < 3; i++) {
         const row = document.createElement('tr');
-        row.innerHTML = '<td colspan="8"><div class="skeleton-line" style="width:60%"></div></td>';
+        row.innerHTML = '<td colspan="5"><div class="skeleton-line" style="width:60%"></div></td>';
         tbody.appendChild(row);
       }
     }
 
     export function renderProfilesError(tbody, message) {
       tbody.innerHTML =
-        '<tr><td colspan="8">' +
+        '<tr><td colspan="5">' +
         '<div class="section-error">' +
         '<i class="fas fa-triangle-exclamation"></i>' +
         '<span>Profili non caricati: ' + esc(message) + '</span>' +
@@ -146,14 +127,18 @@
       if (!detailRow) return;
       const isHidden = detailRow.style.display === 'none';
       detailRow.style.display = isHidden ? 'table-row' : 'none';
+      if (isHidden) expandedProfiles.add(profileName);
+      else expandedProfiles.delete(profileName);
       const expandIcon = document.querySelector('[data-expand-icon="' + CSS.escape(profileName) + '"]');
       if (expandIcon) expandIcon.classList.toggle('expanded', isHidden);
     }
 
     // ── Cancellazione skill ──────────────────────────────────────
     async function deleteSkill(profileName, skillName, category, skillType, btn, onChanged) {
-      if (!confirm('Cancellare la skill "' + skillName + '"?' +
-        (skillType !== 'local' ? '\n\n⚠️ Skill ' + skillType + ' — visibile a TUTTI i profili.' : ''))) return;
+      if (!await confirmDialog('Cancellare la skill "' + skillName + '"?' +
+        (skillType !== 'local' ? '\n\n⚠️ Skill ' + skillType + ' — visibile a TUTTI i profili.' : ''), {
+        title: 'Cancellare skill?', okText: 'Cancella', danger: skillType !== 'local',
+      })) return;
 
       if (btn) {
         btn.disabled = true;
@@ -171,7 +156,7 @@
         });
         const data = await resp.json();
         if (!data.deleted) {
-          alert('Errore: ' + (data.error || 'cancellazione fallita'));
+          await alertDialog('Errore: ' + (data.error || 'cancellazione fallita'));
           if (btn) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
@@ -180,7 +165,7 @@
         }
         await onChanged();
       } catch (err) {
-        alert('Errore: ' + err.message);
+        await alertDialog('Errore: ' + err.message);
         if (btn) {
           btn.disabled = false;
           btn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
@@ -218,7 +203,20 @@
         '<span><i class="fa-regular fa-star"></i> ' + esc(useLabel) + '</span>' +
         (ago ? '<span style="color:#484f58;">' + esc(ago) + '</span>' : '') +
         '</div>';
-      if (onOpen) card.addEventListener('click', () => onOpen(sk));
+      if (onOpen) card.addEventListener('click', e => {
+        if (e.target.closest('[data-del]')) return; // cestino: gestito in delega, non aprire il modal
+        onOpen(sk);
+      });
+      if (onOpen) {
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.addEventListener('keydown', e => {
+          if ((e.key === 'Enter' || e.key === ' ') && e.target === card) {
+            e.preventDefault();
+            onOpen(sk);
+          }
+        });
+      }
       return card;
     }
 
@@ -257,7 +255,7 @@
         } else {
           const sorted = sortSkills(list);
           const grid = document.createElement('div');
-          grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;';
+          grid.className = 'skill-grid';
           sorted.forEach(sk => {
             grid.appendChild(buildSkillCard(sk, {
               icon: 'fa-solid fa-puzzle-piece',
@@ -273,15 +271,16 @@
 
     // ── Render Skill Condivise (elenco) ────────────────────────────
     export function renderSkillMatrixShared(contentEl, profiles, onOpenSkill) {
+      const section = contentEl.closest('section');
       const profilesWithShared = sortProfiles(profiles).filter(p =>
         p.skills && p.skills.shared && p.skills.shared.list && p.skills.shared.list.length > 0
       );
 
       if (!profilesWithShared.length) {
-        contentEl.innerHTML =
-          '<div class="empty-state"><i class="fa-solid fa-puzzle-piece"></i>Nessuna skill condivisa</div>';
+        if (section) section.style.display = 'none';  // vuota → nascosta, non box inutile
         return;
       }
+      if (section) section.style.display = '';
 
       const sharedList = sortSkills(profilesWithShared[0].skills.shared.list);
 
@@ -302,7 +301,7 @@
       // (già ordinata con sortSkills: pinned prima, poi use_count)
 
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;';
+      grid.className = 'skill-grid';
 
       sharedList.forEach(sk => {
         const pc = profileCounts[sk.name] || { count: 0, profiles: [] };
@@ -310,7 +309,7 @@
         const card = buildSkillCard(sk, {
           icon: 'fa-solid fa-puzzle-piece',
           iconColor: '#d2a8ff',
-          delAttrs: deleteButtonAttrs('', sk, 'shared'),
+          delAttrs: deleteButtonAttrs('default', sk, 'shared'),
           onOpen: s => onOpenSkill(s, '', 'shared'),
         });
         // Inserisce il conteggio profili accanto al nome
@@ -330,6 +329,7 @@
 
     // ── Render Skill Primarie (card) ─────────────────────────────
     export function renderSkillPrimary(contentEl, profiles, onOpenSkill) {
+      const section = contentEl.closest('section');
       const defaultProfile = profiles.find(p => p.name === 'default');
 
       const primaryList = (defaultProfile && defaultProfile.skills && defaultProfile.skills.primary && defaultProfile.skills.primary.list)
@@ -337,20 +337,20 @@
         : [];
 
       if (!primaryList.length) {
-        contentEl.innerHTML =
-          '<div class="empty-state"><i class="fa-solid fa-puzzle-piece"></i>Nessuna skill primaria per questo profilo</div>';
+        if (section) section.style.display = 'none';
         return;
       }
+      if (section) section.style.display = '';
 
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;';
+      grid.className = 'skill-grid';
 
       primaryList.forEach(sk => {
         grid.appendChild(buildSkillCard(sk, {
           icon: 'fa-solid fa-crown',
           iconColor: '#d29922',
           metaHtml: '<span class="primary-badge"><i class="fa-solid fa-lock"></i> solo default + ceo</span>',
-          delAttrs: deleteButtonAttrs('', sk, 'primary'),
+          delAttrs: deleteButtonAttrs('default', sk, 'primary'),
           onOpen: s => onOpenSkill(s, '', 'primary'),
         }));
       });
@@ -361,14 +361,15 @@
 
     // ── Render Skill Bundles ─────────────────────────────────────
     export function renderSkillBundles(contentEl, bundles, onOpenSkill) {
+      const section = contentEl.closest('section');
       if (!bundles || !bundles.length) {
-        contentEl.innerHTML =
-          '<div class="empty-state"><i class="fa-solid fa-layer-group"></i>Nessun bundle di skill configurato</div>';
+        if (section) section.style.display = 'none';
         return;
       }
+      if (section) section.style.display = '';
 
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;';
+      grid.className = 'skill-grid';
 
       bundles.forEach(b => {
         const skillCount = b.skills ? b.skills.length : 0;
@@ -396,6 +397,14 @@
           '</div>';
 
         card.addEventListener('click', () => onOpenSkill(b, null, 'bundle'));
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.addEventListener('keydown', e => {
+          if ((e.key === 'Enter' || e.key === ' ') && e.target === card) {
+            e.preventDefault();
+            onOpenSkill(b, null, 'bundle');
+          }
+        });
         grid.appendChild(card);
       });
 

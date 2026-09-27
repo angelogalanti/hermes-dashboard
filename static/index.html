@@ -12,23 +12,32 @@
     <header>
       <h1><i class="fas fa-robot"></i> Hermes Dashboard</h1>
       <p>Panoramica dei profili e stato dei task kanban</p>
-      <div id="opencode-usage" class="opencode-section"></div>
     </header>
 
     <div class="controls">
       <div class="controls-actions">
-        <button id="refresh-btn">
-          <i class="fas fa-sync-alt"></i> Aggiorna
+        <input id="filter-input" class="filter-input" type="search" name="filter" placeholder="Filtra skill / task…  ( / )" autocomplete="off" aria-label="Filtra skill e task">
+        <span id="filter-count" class="filter-count" aria-live="polite"></span>
+        <button id="refresh-btn" class="icon-btn" title="Forza aggiornamento (ignora cache)" aria-label="Forza aggiornamento">
+          <i class="fas fa-sync-alt" aria-hidden="true"></i>
         </button>
-        <button id="health-btn">
-          <i class="fa-solid fa-heart-pulse"></i> Testa health
+        <button id="health-btn" class="btn-secondary" title="Lancia il test health sui provider (chiama API esterne)">
+          <i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Testa health
         </button>
       </div>
       <div class="controls-status">
+        <span id="gateway-pill" class="status-pill" title="Stato gateway"></span>
+        <span id="health-pill" class="status-pill" title="Stato provider"></span>
         <span id="credits-badge" class="credits-badge"></span>
-        <span id="last-update"></span>
+        <span id="last-update" aria-live="polite"></span>
       </div>
     </div>
+
+    <!-- Sezione OpenCode Usage -->
+    <section id="usage-section">
+      <h2><i class="fa-solid fa-bolt"></i> OpenCode Usage</h2>
+      <div id="opencode-usage" class="opencode-section"></div>
+    </section>
 
     <!-- Sezione Kanban (Board) — ALTO -->
     <section id="kanban-section">
@@ -44,9 +53,6 @@
           <thead>
             <tr>
               <th>Profilo</th>
-              <th>Gateway</th>
-              <th>Health</th>
-              <th>Piattaforme</th>
               <th>Modello</th>
               <th>Provider</th>
               <th>SOUL/AGENTS</th>
@@ -101,7 +107,7 @@
   <!-- ── Skill Modal ──────────────────── -->
   <div class="skill-modal-overlay" id="skill-modal">
     <div class="skill-modal">
-      <button class="skill-modal-close">&times;</button>
+      <button class="skill-modal-close" aria-label="Chiudi">&times;</button>
       <div class="skill-modal-name"><i class="fa-solid fa-brain"></i> <span id="modal-name"></span></div>
       <div class="skill-modal-category" id="modal-category"></div>
       <div class="skill-modal-description" id="modal-description"></div>
@@ -161,7 +167,7 @@
   <!-- SOUL/AGENTS Modal -->
   <div class="skill-modal-overlay" id="soul-modal">
     <div class="skill-modal soul-modal">
-      <button class="skill-modal-close">&times;</button>
+      <button class="skill-modal-close" aria-label="Chiudi">&times;</button>
       <div class="skill-modal-name"><i class="fa-solid fa-scroll"></i> <span id="soul-modal-title"></span></div>
       <div class="skill-modal-category" id="soul-modal-subtitle"></div>
       <pre id="soul-modal-content" style="background:#161b22;border:1px solid #21262d;border-radius:6px;padding:16px;font-size:13px;color:#c9d1d9;white-space:pre-wrap;word-wrap:break-word;max-height:70vh;overflow-y:auto;font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;"></pre>
@@ -171,12 +177,24 @@
   <!-- Heartbeat Modal -->
   <div class="skill-modal-overlay" id="heartbeat-modal">
     <div class="skill-modal heartbeat-modal">
-      <button class="skill-modal-close">&times;</button>
+      <button class="skill-modal-close" aria-label="Chiudi">&times;</button>
       <div class="skill-modal-name">
         <i class="fa-solid fa-heart-pulse" style="color:#f85149;"></i>
         <span id="heartbeat-modal-title"></span>
       </div>
       <div id="heartbeat-modal-content" class="heartbeat-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Confirm / Alert Modal (sostituisce confirm()/alert() nativi) -->
+  <div class="skill-modal-overlay" id="confirm-modal">
+    <div class="skill-modal">
+      <div class="skill-modal-name"><i class="fa-solid fa-circle-question"></i> <span id="confirm-title">Conferma</span></div>
+      <div class="skill-modal-description" id="confirm-message"></div>
+      <div class="confirm-actions">
+        <button class="confirm-btn-cancel" id="confirm-cancel">Annulla</button>
+        <button class="confirm-btn-ok" id="confirm-ok">Conferma</button>
+      </div>
     </div>
   </div>
 

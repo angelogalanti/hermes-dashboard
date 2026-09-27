@@ -20,11 +20,12 @@
     } from './skills.js';
     import {
       renderCredits, renderOpenCodeUsage,
+      renderGatewayPill, renderHealthPill,
       renderUsageSkeleton, renderUsageError, markStale,
     } from './widgets.js';
     import {
       openSkillModal, openSoulModal, openAgentsModal,
-      openHeartbeatModal, initModals,
+      openTaskModal, confirmDialog, initModals,
     } from './modals.js';
 
     const FAST_INTERVAL = 10000;
@@ -42,6 +43,8 @@
     const skillBundlesContent = document.getElementById('skill-bundles-content');
     const creditsBadge = document.getElementById('credits-badge');
     const usageContainer = document.getElementById('opencode-usage');
+    const gatewayPill = document.getElementById('gateway-pill');
+    const healthPill = document.getElementById('health-pill');
 
     // Primo caricamento riuscito per sezione (errori → box solo se mai visti dati)
     const hasData = { fast: false, bundles: false, credits: false, usage: false };
@@ -63,11 +66,14 @@
         }
         renderKanbanBoard(kanbanBoard, data.kanban || [], data.profiles || []);
         renderProfiles(profilesBody, data.profiles || []);
+        renderGatewayPill(gatewayPill, data.profiles || []);
         renderSkillListByProfile(skillLocalContent, data.profiles || [], openSkillModal);
         renderSkillMatrixShared(skillSharedContent, data.profiles || [], openSkillModal);
         renderSkillPrimary(skillPrimaryContent, data.profiles || [], openSkillModal);
         hasData.fast = true;
         touchLastUpdate();
+        const fi = document.getElementById('filter-input');
+        if (fi && fi.value) fi.dispatchEvent(new Event('input')); // re-applica filtro ai nodi ri-renderizzati
       } catch (err) {
         console.error('refreshFast:', err);
         if (!hasData.fast) {
@@ -82,13 +88,22 @@
       }
     }
 
-    // ── Refresh lento: bundles + credits + usage in parallelo ───
+    // ── Refresh lento: bundles + credits + usage + health in parallelo ───
     async function refreshSlow() {
-      const [bundlesRes, creditsRes, usageRes] = await Promise.allSettled([
+      const [bundlesRes, creditsRes, usageRes, healthRes] = await Promise.allSettled([
         fetchJSON('/api/skill-bundles'),
         fetchJSON('/api/credits'),
         fetchJSON('/api/opencode-usage'),
+        fetchJSON('/api/health'),
       ]);
+
+      // Health (senza force: cache <5min gratis, scaduta = un test vero per provider)
+      // Se cambiato → pill + invalida ETag status così il prossimo fast re-renderizza
+      if (healthRes.status === 'fulfilled' && healthRes.value !== NOT_MODIFIED) {
+        renderHealthPill(healthPill, healthRes.value);
+        dropEtag('/api/status');
+        refreshFast();
+      }
 
       // Bundles
       if (bundlesRes.status === 'fulfilled') {
@@ -127,10 +142,14 @@
       } else {
         renderUsageError(usageContainer, usageRes.reason.message);
       }
+      const fi2 = document.getElementById('filter-input');
+      if (fi2 && fi2.value) fi2.dispatchEvent(new Event('input')); // re-applica filtro ai nodi ri-renderizzati
     }
 
-    // ── Refresh manuale (pulsante) ───────────────────────────────
+    // ── Refresh manuale = force (droppa ETag: ricarica tutto, non solo il cambiato) ──
     async function refreshAll() {
+      ['/api/status', '/api/skill-bundles', '/api/credits', '/api/opencode-usage']
+        .forEach(dropEtag);
       await Promise.allSettled([refreshFast(), refreshSlow()]);
     }
 
@@ -149,9 +168,12 @@
             if (btn) btn.title = 'Ultimo test: ' + ageTxt;
           }
         } catch (e) { /* si procede comunque al test */ }
-        if (!confirm('Lanciare il test health sui provider? (ultimo test: ' + ageTxt + ')')) return;
+        if (!await confirmDialog('Lanciare il test health sui provider? (ultimo test: ' + ageTxt + ')', {
+          title: 'Testa health', okText: 'Testa',
+        })) return;
         dropEtag('/api/status');
-        await fetchJSON('/api/health?force=1');
+        const health = await fetchJSON('/api/health?force=1');
+        if (health && health !== NOT_MODIFIED) renderHealthPill(healthPill, health);
         await refreshAll();
       } catch (err) {
         console.error('Health test failed:', err);
@@ -166,13 +188,97 @@
     initModals();
     initKanban(kanbanBoard, {
       onChanged: () => refreshFast(),
-      onOpenHeartbeats: (taskId) => openHeartbeatModal(taskId),
+      onOpenTask: (task) => openTaskModal(task),
     });
     initSkills({
       onChanged: () => refreshFast(),
       onOpenSkill: (sk, profile, type) => openSkillModal(sk, profile, type),
       onOpenSoul: (name) => openSoulModal(name),
       onOpenAgents: (name) => openAgentsModal(name),
+    });
+
+    // ── Filtro ricerca (skill + task + profili, nativo; Esc di type=search svuota da solo) ──
+    const filterInput = document.getElementById('filter-input');
+    const filterCount = document.getElementById('filter-count');
+    if (filterInput) {
+      filterInput.addEventListener('input', () => {
+        const q = filterInput.value.trim().toLowerCase();
+        let n = 0;
+        document.querySelectorAll('.skill-card, .skill-bundle-card, .kanban-card').forEach(el => {
+          const show = !q || el.textContent.toLowerCase().includes(q);
+          el.style.display = show ? '' : 'none';
+          if (q && show) n++;
+        });
+        document.querySelectorAll('tr.profile-row').forEach(row => {
+          const show = !q || row.textContent.toLowerCase().includes(q);
+          row.style.display = show ? '' : 'none';
+          if (q && show) n++;
+        });
+        // Nascondi contenitori svuotati dal filtro (header profilo, grid, colonne kanban)
+        document.querySelectorAll('#skill-local-content h3').forEach(h => {
+          const grid = h.nextElementSibling;
+          const anyVisible = grid && [...grid.children].some(c => c.style.display !== 'none');
+          h.style.display = !q || anyVisible ? '' : 'none';
+          if (grid) grid.style.display = !q || anyVisible ? '' : 'none';
+        });
+        document.querySelectorAll('#skill-local-content > div:not(.skill-grid)').forEach(el => {
+          if (el.textContent.includes('nessuna skill locale')) el.style.display = !q ? '' : 'none';
+        });
+        document.querySelectorAll('#kanban-board .kanban-column').forEach(col => {
+          const cards = [...col.querySelectorAll('.kanban-card')].filter(c => c.style.display !== 'none');
+          const emptyEl = col.querySelector('.kanban-column-empty');
+          const countEl = col.querySelector('.count');
+          if (countEl) countEl.textContent = q ? cards.length : col.querySelectorAll('.kanban-card').length;
+          if (emptyEl && q) emptyEl.style.display = cards.length ? 'none' : 'block';
+        });
+        document.querySelectorAll('#skill-bundles-content, #skill-shared-content, #skill-primary-content').forEach(box => {
+          const anyVisible = [...box.querySelectorAll('.skill-card, .skill-bundle-card')].some(c => c.style.display !== 'none');
+          const section = box.closest('section');
+          if (!section) return;
+          if (!('secDisplay' in box.dataset)) box.dataset.secDisplay = section.style.display; // stato pre-filtro (es. sezione vuota nascosta dal render)
+          if (q) section.style.display = anyVisible ? box.dataset.secDisplay || '' : 'none';
+          else { section.style.display = box.dataset.secDisplay || ''; delete box.dataset.secDisplay; }
+        });
+        if (filterCount) filterCount.textContent = q ? (n ? n + ' risultati' : 'nessun risultato') : '';
+      });
+      // "/" focalizza il filtro (fuori dai campi di testo); Esc lo svuota e sfoca
+      document.addEventListener('keydown', e => {
+        const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
+        if (e.key === '/' && !typing) { e.preventDefault(); filterInput.focus(); }
+        else if (e.key === 'Escape' && document.activeElement === filterInput && filterInput.value) {
+          filterInput.value = '';
+          filterInput.dispatchEvent(new Event('input'));
+          filterInput.blur();
+        }
+      });
+    }
+
+    // ── Sezioni collassabili (le section sono statiche: lo stato sopravvive ai refresh) ──
+    const collapsedSections = new Set(JSON.parse(localStorage.getItem('dash-collapsed') || '[]'));
+    document.querySelectorAll('section[id] h2').forEach(h2 => {
+      const section = h2.closest('section');
+      const chev = document.createElement('i');
+      chev.className = 'fa-solid fa-chevron-down section-toggle';
+      chev.setAttribute('aria-hidden', 'true');
+      h2.appendChild(chev);
+      h2.setAttribute('role', 'button');
+      h2.setAttribute('tabindex', '0');
+      if (collapsedSections.has(section.id)) section.classList.add('collapsed');
+      const toggle = () => {
+        const collapsed = section.classList.toggle('collapsed');
+        if (collapsed) collapsedSections.add(section.id);
+        else collapsedSections.delete(section.id);
+        try {
+          localStorage.setItem('dash-collapsed', JSON.stringify([...collapsedSections]));
+        } catch (e) { /* storage non disponibile: lo stato vive solo in memoria */ }
+      };
+      h2.addEventListener('click', toggle);
+      h2.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === h2) {
+          e.preventDefault();
+          toggle();
+        }
+      });
     });
 
     // Controlli statici
@@ -191,6 +297,7 @@
     renderKanbanSkeleton(kanbanBoard);
     renderProfilesSkeleton(profilesBody);
     renderUsageSkeleton(usageContainer);
+    renderHealthPill(healthPill, null);
 
     let fastTimer = null;
     let slowTimer = null;

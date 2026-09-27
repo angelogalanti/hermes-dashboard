@@ -164,13 +164,21 @@
     }
 
     // ── Heartbeat Modal ──────────────────────────────────────────
-    export async function openHeartbeatModal(taskId) {
+    export async function openHeartbeatModal(taskId, task) {
       const overlay = document.getElementById('heartbeat-modal');
       if (!overlay) return;
 
       document.getElementById('heartbeat-modal-title').textContent =
-        'Heartbeat \u2014 ' + shortId(taskId);
-      document.getElementById('heartbeat-modal-content').innerHTML =
+        'Heartbeat \u2014 ' + shortId(taskId) + (task && task.title ? ' \u00b7 ' + task.title : '');
+      var taskSummary = '';
+      if (task) {
+        taskSummary = '<div class="hb-task-summary">' +
+          '<strong>' + esc(task.title || '(senza titolo)') + '</strong>' +
+          '<span>' + esc(task.status || '') + ' \u00b7 ' + esc(task.assignee || task.profile || '') +
+          ((task.priority !== undefined && task.priority !== null && task.priority !== 999) ? ' \u00b7 P' + esc(String(task.priority)) : '') + '</span>' +
+          '</div>';
+      }
+      document.getElementById('heartbeat-modal-content').innerHTML = taskSummary +
         '<div class="loading-spinner"><i class="fa-solid fa-spinner fa-spin"></i> Caricamento...</div>';
       overlay.classList.add('open');
 
@@ -179,11 +187,12 @@
 
         if (!data.heartbeats || data.heartbeats.length === 0) {
           document.getElementById('heartbeat-modal-content').innerHTML =
+            taskSummary +
             '<div class="empty-state"><i class="fa-solid fa-heart-circle-minus"></i> Nessun heartbeat registrato</div>';
           return;
         }
 
-        let html = '<div class="hb-summary">' +
+        let html = taskSummary + '<div class="hb-summary">' +
           '<span><i class="fa-solid fa-heart-pulse" style="color:#f85149;"></i> ' + data.total + ' heartbeat totali</span>' +
           '</div>';
 
@@ -220,6 +229,67 @@
       overlay.classList.remove('open');
     }
 
+    // ── Confirm / Alert dialog (sostituisce confirm()/alert() nativi) ──
+    let confirmResolve = null;
+
+    function closeConfirmModal(result) {
+      const overlay = document.getElementById('confirm-modal');
+      if (overlay) overlay.classList.remove('open');
+      if (confirmResolve) {
+        confirmResolve(result);
+        confirmResolve = null;
+      }
+    }
+
+    export function confirmDialog(message, { title = 'Conferma', okText = 'Conferma', danger = false, hideCancel = false } = {}) {
+      const overlay = document.getElementById('confirm-modal');
+      if (!overlay) return Promise.resolve(window.confirm(message)); // fallback
+      document.getElementById('confirm-title').textContent = title;
+      document.getElementById('confirm-message').textContent = message || '';
+      const okBtn = document.getElementById('confirm-ok');
+      const cancelBtn = document.getElementById('confirm-cancel');
+      okBtn.textContent = okText;
+      okBtn.classList.toggle('danger', danger);
+      cancelBtn.style.display = hideCancel ? 'none' : '';
+      overlay.classList.add('open');
+      (hideCancel ? okBtn : cancelBtn).focus();
+      return new Promise(resolve => { confirmResolve = resolve; });
+    }
+
+    export function alertDialog(message) {
+      return confirmDialog(message, { title: 'Errore', okText: 'Chiudi', hideCancel: true });
+    }
+
+    // ── Task Detail Modal (riusa il guscio heartbeat) ─────────────
+    // Running/Blocked → timeline heartbeat; gli altri → dettaglio task (dati già in memoria).
+    export function openTaskModal(task) {
+      if (!task) return;
+      if (task.status === 'running' || task.status === 'blocked') {
+        return openHeartbeatModal(task.id, task);
+      }
+      const overlay = document.getElementById('heartbeat-modal');
+      if (!overlay) return;
+
+      document.getElementById('heartbeat-modal-title').textContent = 'Task — ' + shortId(task.id);
+      const row = (label, value) =>
+        '<div class="skill-modal-date"><span>' + label + '</span><strong>' + value + '</strong></div>';
+      const fmtDate = iso => iso ? esc(new Date(iso).toLocaleString('it-IT')) : '<span style="color:#484f58;">—</span>';
+      document.getElementById('heartbeat-modal-content').innerHTML =
+        '<div class="skill-modal-dates">' +
+        row('Titolo', esc(task.title || '(senza titolo)')) +
+        row('Stato', esc(task.status || '—')) +
+        row('Assignee', esc(task.assignee || task.profile || '—')) +
+        row('Modello', esc(task.model || '—')) +
+        row('Priorità', esc(String(task.priority ?? '—'))) +
+        row('Heartbeat', esc(String(task.heartbeat_count ?? 0))) +
+        row('Creato', fmtDate(task.created_at)) +
+        row('Avviato', fmtDate(task.started_at)) +
+        row('Completato', fmtDate(task.completed_at)) +
+        (task.last_note ? row('Ultima nota', esc(task.last_note)) : '') +
+        '</div>';
+      overlay.classList.add('open');
+    }
+
     // ── Binding overlay / ESC (sostituisce gli onclick inline) ───
     export function initModals() {
       const bindings = [
@@ -247,6 +317,17 @@
           closeSkillModal();
           closeSoulModal();
           closeHeartbeatModal();
+          closeConfirmModal(false);
         }
       });
+
+      // Confirm modal: bottoni + click sfondo
+      const confirmOverlay = document.getElementById('confirm-modal');
+      if (confirmOverlay) {
+        document.getElementById('confirm-ok').addEventListener('click', () => closeConfirmModal(true));
+        document.getElementById('confirm-cancel').addEventListener('click', () => closeConfirmModal(false));
+        confirmOverlay.addEventListener('click', e => {
+          if (e.target === confirmOverlay) closeConfirmModal(false);
+        });
+      }
     }

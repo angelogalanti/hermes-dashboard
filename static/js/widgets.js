@@ -23,6 +23,47 @@
       }
     }
 
+    // ── Pill gateway (uno solo: default, o primo running) ───────
+    export function renderGatewayPill(pill, profiles) {
+      if (!pill) return;
+      const gw = (profiles || []).find(p => p.name === 'default') ||
+        (profiles || []).find(p => p.gateway === 'running' || p.gateway === 'connected');
+      if (!gw) {
+        pill.style.display = 'none';
+        return;
+      }
+      pill.style.display = '';
+      const on = gw.gateway === 'running' || gw.gateway === 'connected';
+      const color = on ? '#3fb950' : '#f85149';
+      const plats = (gw.platforms || []).join(', ') || '—';
+      pill.innerHTML = '<span class="status-dot" style="background:' + color + '"></span>' +
+        '<span>Gateway ' + (on ? 'attivo' : 'fermo') + '</span>' +
+        (on && gw.platforms && gw.platforms.length ? '<span style="color:#484f58;">· ' + esc(plats) + '</span>' : '');
+      pill.title = 'Gateway: ' + (gw.gateway || 'unknown') + ' — piattaforme: ' + plats;
+    }
+
+    // ── Pill health provider (aggregata da /api/health) ──────────
+    export function renderHealthPill(pill, data) {
+      if (!pill) return;
+      if (!data || !data.providers || !Object.keys(data.providers).length) {
+        pill.style.display = '';
+        pill.innerHTML = '<span class="status-dot" style="background:#484f58"></span><span>Health —</span>';
+        pill.title = 'In attesa del primo controllo (ogni 5 min) o premi Testa health';
+        return;
+      }
+      pill.style.display = '';
+      const entries = Object.entries(data.providers);
+      const bad = entries.filter(([, v]) => v && v.ok === false);
+      if (!bad.length) {
+        pill.innerHTML = '<span class="status-dot" style="background:#3fb950"></span>' +
+          '<span>Provider ok (' + entries.length + ')</span>';
+        pill.title = entries.map(([k, v]) => k.split(':')[0] + ': ' + (v.latency || '?') + 's').join(' · ');
+      } else {
+        pill.innerHTML = '<span class="status-dot" style="background:#f85149"></span>' +
+          '<span>Provider ko: ' + esc(bad.map(([k]) => k.split(':')[0]).join(', ')) + '</span>';
+        pill.title = bad.map(([k, v]) => k + ': ' + (v.error || 'errore')).join(' · ');
+      }
+    }
     // ── Credits badge ────────────────────────────────────────────
     // Ogni servizio è una pill omogenea: dot colorato + nome + valore.
     // Nessun separatore: la spaziatura è via flex gap.
@@ -43,6 +84,7 @@
         return;
       }
       badge.style.display = '';
+      badge.classList.remove('warning'); // reset: il toggle sotto scatta solo nel ramo ok
 
       const services = data.services;
       const parts = [];

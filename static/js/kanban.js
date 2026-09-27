@@ -1,6 +1,10 @@
     // ── kanban.js — board, card, archiviazione ───────────────────────
     import { esc, shortId, timeAgo } from './utils.js';
     import { fetchJSON } from './api.js';
+    import { confirmDialog, alertDialog } from './modals.js';
+
+    // Indice id → task (ultimo render): il click apre il dettaglio senza fetch
+    let byId = {};
 
     const COLUMNS = [
       { id: 'todo',    label: 'Todo',    icon: 'fa-solid fa-pen' },
@@ -106,6 +110,13 @@
         }
       });
 
+      // Running: il più vecchio (started_at) primo — quello che rischia di marcire si vede subito
+      groups.running.sort((a, b) => (a.started_at || a.created_at || '') < (b.started_at || b.created_at || '') ? -1 : 1);
+
+      // Indice id → task per il click (apre dettaglio senza fetch)
+      byId = {};
+      tasks.forEach(t => { byId[String(t.id)] = t; });
+
       COLUMNS.forEach(col => {
         const colTasks = groups[col.id];
         const cardsEl  = document.getElementById('cards-' + col.id);
@@ -126,12 +137,14 @@
 
         colTasks.forEach(t => {
           const card = document.createElement('div');
-          card.className = 'kanban-card' + (col.id === 'blocked' ? ' archive' : '');
+          card.className = 'kanban-card' + ((col.id === 'blocked' || col.id === 'done') ? ' archive' : '');
           card.dataset.taskId = t.id || '';
           card.style.cursor = 'pointer';
+          card.setAttribute('role', 'button');
+          card.setAttribute('tabindex', '0');
 
           let archiveBtn = '';
-          if (col.id === 'blocked') {
+          if (col.id === 'blocked' || col.id === 'done') {
             archiveBtn = '<button class="kanban-card-archive" title="Archivia task" data-archive-id="' + esc(t.id) + '"><i class="fa-solid fa-box-archive"></i></button>';
           }
 
@@ -211,7 +224,9 @@
 
     // ── Archiviazione task ───────────────────────────────────────
     async function archiveTask(taskId, onChanged) {
-      if (!confirm('Archiviare il task ' + taskId + '?')) return;
+      if (!await confirmDialog('Archiviare il task ' + taskId + '?', {
+        title: 'Archivia task', okText: 'Archivia',
+      })) return;
       try {
         const resp = await fetch('/api/kanban/archive/' + encodeURIComponent(taskId), {
           method: 'POST',
@@ -220,11 +235,12 @@
         await onChanged();
       } catch (err) {
         console.error('Errore archiviazione task:', err);
+        await alertDialog('Archiviazione fallita: ' + err.message);
       }
     }
 
     // ── Delegation click (niente onclick inline) ─────────────────
-    export function initKanban(boardEl, { onChanged, onOpenHeartbeats }) {
+    export function initKanban(boardEl, { onChanged, onOpenTask }) {
       boardEl.addEventListener('click', e => {
         const retryBtn = e.target.closest('[data-retry]');
         if (retryBtn) return; // gestito dall'orchestratore in app.js
@@ -235,6 +251,13 @@
           return;
         }
         const card = e.target.closest('.kanban-card[data-task-id]');
-        if (card && card.dataset.taskId) onOpenHeartbeats(card.dataset.taskId);
+        if (card && card.dataset.taskId) onOpenTask(byId[card.dataset.taskId]);
+      });
+      // Tastiera: Enter/Spazio apre il dettaglio (stesso pattern delle righe profilo)
+      boardEl.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.kanban-card[data-task-id]')) {
+          e.preventDefault();
+          onOpenTask(byId[e.target.dataset.taskId]);
+        }
       });
     }
