@@ -83,6 +83,8 @@ def _scan_skills_dir(scan_dir: Path) -> tuple[set[str], set[str], dict[str, str]
     for sf in sorted(scan_dir.rglob('SKILL.md')):
         rel = sf.relative_to(scan_dir)
         parts = rel.parts
+        if any(p.startswith('.') for p in parts):
+            continue  # .archive/.hub/.git: Hermes non le carica (_SCAN_SKIP_PARTS)
         if len(parts) == 2:
             # <skill-name>/SKILL.md — flat
             names.add(parts[0])
@@ -109,6 +111,8 @@ def _load_skill_descriptions(scan_dir: Path) -> dict[str, str]:
     for sf in sorted(scan_dir.rglob('SKILL.md')):
         rel = sf.relative_to(scan_dir)
         parts = rel.parts
+        if any(p.startswith('.') for p in parts):
+            continue  # .archive/.hub/.git: Hermes non le carica (_SCAN_SKIP_PARTS)
         if len(parts) == 2:
             skill_name = parts[0]
         elif len(parts) == 3:
