@@ -3,7 +3,7 @@
 
 GET https://opencode.ai/zen/go/v1/usage with Bearer OPENCODE_GO_API_KEY.
 Niente scraping, niente cookie. Output invariato per il widget dashboard:
-{accounts: [{name, windows: {label: {pct, resets_in}}]}.
+{accounts: [{name, windows: {label: {pct, resets_in, resets_short}}]}.
 
 Cache TTL: 300s (5 min). Pass --force to bypass cache.
 On API failure the last valid data is preserved.
@@ -132,6 +132,27 @@ def _fmt_resets(resets_at: str | None) -> str:
         return '—'
 
 
+def _fmt_resets_short(resets_at: str | None) -> str:
+    """'2026-09-28T00:00:00.000Z' → '3h49m' / '11g5h' (compatto per badge)."""
+    if not resets_at:
+        return ''
+    try:
+        dt = datetime.fromisoformat(str(resets_at).replace('Z', '+00:00'))
+        delta = (dt - datetime.now(timezone.utc)).total_seconds()
+        if delta <= 0:
+            return 'a breve'
+        days, rem = divmod(int(delta), 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes = rem // 60
+        if days > 0:
+            return f'{days}g{hours}h' if hours else f'{days}g'
+        if hours > 0:
+            return f'{hours}h{minutes}m' if minutes else f'{hours}h'
+        return f'{minutes}m'
+    except (ValueError, TypeError):
+        return ''
+
+
 # ── API ─────────────────────────────────────────────────────────────
 
 def fetch_usage(api_key: str) -> dict | None:
@@ -166,7 +187,7 @@ def fetch_usage(api_key: str) -> dict | None:
             pct = round(float(item.get('percent', 0)), 1)
         except (TypeError, ValueError):
             continue
-        windows[label] = {'pct': pct, 'resets_in': _fmt_resets(item.get('resetsAt'))}
+        windows[label] = {'pct': pct, 'resets_in': _fmt_resets(item.get('resetsAt')), 'resets_short': _fmt_resets_short(item.get('resetsAt'))}
     return windows or None
 
 

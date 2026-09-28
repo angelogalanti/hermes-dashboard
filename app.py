@@ -38,14 +38,95 @@ KANBAN_DB = Path.home() / '.hermes' / 'kanban.db'
 SHARED_SKILLS_DIR = Path.home() / '.hermes' / 'skills-shared'
 PRIMARY_SKILLS_DIR = Path.home() / '.hermes' / 'skills-generalist'
 FRONTLINE_SKILLS_DIR = Path.home() / '.hermes' / 'skills-frontline'
+WORKER_SKILLS_DIR = Path.home() / '.hermes' / 'skills-worker'
+OPERATOR_SKILLS_DIR = Path.home() / '.hermes' / 'skills-operators'
 GLOBAL_SKILLS_DIR = Path.home() / '.hermes' / 'skills'
 
 SKILL_BASES = {
     'local':   PROFILES_DIR,
     'shared':  SHARED_SKILLS_DIR,
     'frontline': FRONTLINE_SKILLS_DIR,
+    'worker':  WORKER_SKILLS_DIR,
+    'operator': OPERATOR_SKILLS_DIR,
     'primary': PRIMARY_SKILLS_DIR,  # primary == skills-generalist (solo default/ceo)
 }
+
+# ── Provenienza skill (dot colorati in dashboard) ────────────────────
+# native: skill ufficiali di Hermes Agent (catalogo bundled upstream 28/09/2026:
+# docs/reference/skills-catalog — copiate in ~/.hermes/skills/ all'install).
+# NOTA: il blocco metadata.hermes nel frontmatter NON indica provenienza
+# upstream (lo hanno anche skill nostre) — non usarlo per classificare.
+# external: scaricate da fuori (author esterno o lista candidati verificata con l'utente).
+# ours: tutto il resto (default).
+NATIVE_SKILLS = {
+    'apple-notes', 'apple-reminders', 'findmy', 'imessage',
+    'claude-code', 'codex', 'computer-use', 'hermes-agent', 'opencode',
+    'architecture-diagram', 'ascii-video', 'baoyu-infographic', 'claude-design',
+    'design-md', 'humanizer', 'manim-video', 'p5js', 'popular-web-designs',
+    'songwriting-and-ai-music',
+    'sdlc-review',
+    'email-inbox-triage', 'himalaya',
+    'gif-search', 'songsee', 'youtube-content',
+    'obsidian',
+    'airtable', 'box', 'document-to-action-items', 'docx', 'google-workspace',
+    'maps', 'meeting-action-items', 'notion', 'pdf', 'powerpoint',
+    'product-price-monitor', 'teams-meeting-pipeline', 'weekly-review-planning',
+    'xlsx',
+    'arxiv', 'competitor-news-monitor', 'grounded-citations', 'llm-wiki',
+    'xurl',
+    'codebase-inspection', 'dogfood', 'github', 'hermes-agent-skill-authoring',
+    'inspecting-hermes-desktop-dom', 'node-inspect-debugger', 'python-debugpy',
+    'requesting-code-review', 'simplify-code', 'spike', 'systematic-debugging',
+    'test-driven-development',
+    'blocked-page-recovery',
+}
+EXTERNAL_SKILLS = {
+    # Firmate (campo author esterno)
+    'seo', 'seo-audit', 'seo-page', 'seo-schema', 'seo-sitemap',
+    'seo-content-brief', 'lean-startup', 'frontend-design', 'shadcn',
+    'web-design-guidelines',
+    # Non firmate ma stile esterno (verificate con l'utente 28/09/2026)
+    'mktg-ai-seo', 'mktg-copywriting', 'mktg-cro', 'mktg-marketing-psychology',
+    'mktg-product-marketing', 'mktg-seo-audit', 'mktg-social', 'marketing-ideas',
+    'baoyu-article-illustrator',  # author JimLiu (github.com/JimLiu/baoyu-skills)
+    'grill-me-with-docs',  # deriva da mattpocock/skills (grilling) via upstream optional grill-me
+    'eli5-succinct', 'summary',  # importate identiche da ~/.agents (non scritte qui)
+}
+
+# ── Fonte delle skill scaricate (riga "Fonte:" nel modal) ────────────
+# Solo URL verificati (HTTP 200 + titolo giusto). Senza URL: solo author.
+EXTERNAL_SOURCES = {
+    'mktg-ai-seo': ('Corey Haines', 'https://www.skills.sh/coreyhaines31/marketingskills/ai-seo'),
+    'mktg-copywriting': ('Corey Haines', 'https://www.skills.sh/coreyhaines31/marketingskills/copywriting'),
+    'mktg-cro': ('Corey Haines', 'https://www.skills.sh/coreyhaines31/marketingskills/cro'),
+    'mktg-marketing-psychology': ('Corey Haines', 'https://www.skills.sh/coreyhaines31/marketingskills/marketing-psychology'),
+    'mktg-product-marketing': ('Corey Haines', 'https://www.skills.sh/coreyhaines31/marketingskills/product-marketing'),
+    'mktg-seo-audit': ('Corey Haines', 'https://www.skills.sh/coreyhaines31/marketingskills/seo-audit'),
+    'mktg-social': ('Corey Haines', 'https://www.skills.sh/coreyhaines31/marketingskills/social'),
+    'marketing-ideas': ('Corey Haines', 'https://www.skills.sh/coreyhaines31/marketingskills/marketing-ideas'),
+    'grill-me-with-docs': ('Matt Pocock', 'https://www.skills.sh/mattpocock/skills/grill-me'),
+    'frontend-design': ('Anthropic', 'https://www.skills.sh/anthropics/skills/frontend-design'),
+    'web-design-guidelines': ('Vercel', 'https://www.skills.sh/vercel-labs/agent-skills/web-design-guidelines'),
+    'baoyu-article-illustrator': ('JimLiu', 'https://github.com/JimLiu/baoyu-skills#baoyu-article-illustrator'),
+    'seo': ('AgriciDaniel', 'https://www.skills.sh/agricidaniel/claude-seo/seo'),
+    'seo-audit': ('AgriciDaniel', 'https://www.skills.sh/agricidaniel/claude-seo/seo-audit'),
+    'seo-page': ('AgriciDaniel', 'https://www.skills.sh/agricidaniel/claude-seo/seo-page'),
+    'seo-schema': ('AgriciDaniel', 'https://www.skills.sh/agricidaniel/claude-seo/seo-schema'),
+    'seo-sitemap': ('AgriciDaniel', 'https://www.skills.sh/agricidaniel/claude-seo/seo-sitemap'),
+    'seo-content-brief': ('puneetindersingh', 'https://www.skills.sh/agricidaniel/claude-seo/seo-content-brief'),
+    'lean-startup': ('wondelai', 'https://www.skills.sh/wondelai/skills/lean-startup'),
+    'shadcn': ('shadcn-ui', 'https://ui.shadcn.com/docs/skills'),
+    'eli5-succinct': ('isas1', 'https://www.skills.sh/isas1/skills/eli5-succinct'),
+    'summary': ('isas1', 'https://www.skills.sh/isas1/skills/summary'),
+}
+
+
+def _provenance(skill_name: str) -> str:
+    if skill_name in NATIVE_SKILLS:
+        return 'native'
+    if skill_name in EXTERNAL_SKILLS:
+        return 'external'
+    return 'ours'
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -154,6 +235,13 @@ def _build_skill_lists(
     frontline_names: set[str] | None = None,
     frontline_categories: set[str] | None = None,
     frontline_cat_map: dict[str, str] | None = None,
+    worker_names: set[str] | None = None,
+    worker_categories: set[str] | None = None,
+    worker_cat_map: dict[str, str] | None = None,
+    operator_names: set[str] | None = None,
+    operator_categories: set[str] | None = None,
+    operator_cat_map: dict[str, str] | None = None,
+    own_usage: dict | None = None,
 ) -> dict:
     """Build the full skill response dict with local/shared/primary split + legacy fields.
 
@@ -184,8 +272,20 @@ def _build_skill_lists(
         frontline_categories = set()
     if frontline_cat_map is None:
         frontline_cat_map = {}
+    if worker_names is None:
+        worker_names = set()
+    if worker_categories is None:
+        worker_categories = set()
+    if worker_cat_map is None:
+        worker_cat_map = {}
+    if operator_names is None:
+        operator_names = set()
+    if operator_categories is None:
+        operator_categories = set()
+    if operator_cat_map is None:
+        operator_cat_map = {}
 
-    # Precedenza: local > primary > frontline > shared
+    # Precedenza: local > primary > frontline > worker > operator > shared
     shared_names = shared_names - local_names
     if primary_names:
         primary_names = primary_names - local_names
@@ -193,17 +293,28 @@ def _build_skill_lists(
     if frontline_names:
         frontline_names = frontline_names - local_names - (primary_names or set())
         shared_names = shared_names - frontline_names
+    if worker_names:
+        worker_names = worker_names - local_names - (primary_names or set()) - (frontline_names or set())
+        shared_names = shared_names - worker_names
+    if operator_names:
+        operator_names = operator_names - local_names - (primary_names or set()) - (frontline_names or set()) - (worker_names or set())
+        shared_names = shared_names - operator_names
 
     local_skills: dict[str, dict] = {}
     shared_skills: dict[str, dict] = {}
     primary_skills: dict[str, dict] = {}
     frontline_skills: dict[str, dict] = {}
-    all_categories: set[str] = set(local_categories) | set(shared_categories) | set(primary_categories) | set(frontline_categories)
+    worker_skills: dict[str, dict] = {}
+    operator_skills: dict[str, dict] = {}
+    all_categories: set[str] = set(local_categories) | set(shared_categories) | set(primary_categories) | set(frontline_categories) | set(worker_categories) | set(operator_categories)
 
     def _build_skill_obj(skill_name, u, category):
+        src = EXTERNAL_SOURCES.get(skill_name)
         return {
             'name': skill_name,
             'category': category,
+            'provenance': _provenance(skill_name),
+            'source': {'author': src[0], 'url': src[1]} if src else None,
             'description': descriptions.get(skill_name, ''),
             'use_count': u.get('use_count', 0) if u else 0,
             'view_count': u.get('view_count', 0) if u else 0,
@@ -223,8 +334,19 @@ def _build_skill_lists(
         target[skill_name] = _build_skill_obj(skill_name, u, category)
 
     # ── First pass: usage data (has use_count) ──
+    # ponytail: stale mostra i conteggi reali; solo archived si nasconde.
+    # I locali usano own_usage (per-profilo), i bundle il merge globale.
+    own_norm: dict | None = None
+    if own_usage is not None:
+        own_norm = {}
+        for ok, ou in own_usage.items():
+            if not isinstance(ou, dict) or ou.get('state') == 'archived':
+                continue
+            base = ok.split('/')[-1]
+            if base not in own_norm or ou.get('use_count', 0) > own_norm[base].get('use_count', 0):
+                own_norm[base] = ou
     for usage_key, u in usage.items():
-        if not isinstance(u, dict) or u.get('state') != 'active':
+        if not isinstance(u, dict) or u.get('state') == 'archived':
             continue
         if '/' in usage_key:
             cat, skill_name = usage_key.split('/', 1)
@@ -233,12 +355,19 @@ def _build_skill_lists(
             cat = None
             skill_name = usage_key
 
+        if skill_name in local_names and own_norm is not None:
+            u = own_norm.get(skill_name, u)
+
         if skill_name in local_names:
             _merge(local_skills, skill_name, u, cat)
         elif primary_names and skill_name in primary_names:
             _merge(primary_skills, skill_name, u, cat)
         elif frontline_names and skill_name in frontline_names:
             _merge(frontline_skills, skill_name, u, cat)
+        elif worker_names and skill_name in worker_names:
+            _merge(worker_skills, skill_name, u, cat)
+        elif operator_names and skill_name in operator_names:
+            _merge(operator_skills, skill_name, u, cat)
         elif skill_name in shared_names:
             _merge(shared_skills, skill_name, u, cat)
         # Orphan: usage data without SKILL.md on disk → skip (was deleted)
@@ -255,6 +384,14 @@ def _build_skill_lists(
         for skill_name in sorted(frontline_names):
             if skill_name not in frontline_skills:
                 frontline_skills[skill_name] = _build_skill_obj(skill_name, None, frontline_cat_map.get(skill_name))
+    if worker_names:
+        for skill_name in sorted(worker_names):
+            if skill_name not in worker_skills:
+                worker_skills[skill_name] = _build_skill_obj(skill_name, None, worker_cat_map.get(skill_name))
+    if operator_names:
+        for skill_name in sorted(operator_names):
+            if skill_name not in operator_skills:
+                operator_skills[skill_name] = _build_skill_obj(skill_name, None, operator_cat_map.get(skill_name))
     for skill_name in sorted(shared_names):
         if skill_name not in shared_skills:
             shared_skills[skill_name] = _build_skill_obj(skill_name, None, shared_cat_map.get(skill_name))
@@ -262,7 +399,7 @@ def _build_skill_lists(
     # ── Third pass: fill missing categories from directory scan maps ──
     # Skills with usage data may have flat keys (no category prefix) even when
     # they live in a category subdirectory. Override category from scan maps.
-    for sk_map, target in [(local_cat_map, local_skills), (primary_cat_map, primary_skills), (frontline_cat_map, frontline_skills), (shared_cat_map, shared_skills)]:
+    for sk_map, target in [(local_cat_map, local_skills), (primary_cat_map, primary_skills), (frontline_cat_map, frontline_skills), (worker_cat_map, worker_skills), (operator_cat_map, operator_skills), (shared_cat_map, shared_skills)]:
         for skill_name, cat in sk_map.items():
             if cat and skill_name in target and not target[skill_name].get('category'):
                 target[skill_name]['category'] = cat
@@ -271,10 +408,12 @@ def _build_skill_lists(
     local_sorted = sorted(local_skills.values(), key=lambda s: s['use_count'], reverse=True)
     primary_sorted = sorted(primary_skills.values(), key=lambda s: s['use_count'], reverse=True)
     frontline_sorted = sorted(frontline_skills.values(), key=lambda s: s['use_count'], reverse=True)
+    worker_sorted = sorted(worker_skills.values(), key=lambda s: s['use_count'], reverse=True)
+    operator_sorted = sorted(operator_skills.values(), key=lambda s: s['use_count'], reverse=True)
     shared_sorted = sorted(shared_skills.values(), key=lambda s: s['use_count'], reverse=True)
 
     # ── Combined list for legacy fields ──
-    all_known = list(local_skills.values()) + list(primary_skills.values()) + list(frontline_skills.values()) + list(shared_skills.values())
+    all_known = list(local_skills.values()) + list(primary_skills.values()) + list(frontline_skills.values()) + list(worker_skills.values()) + list(operator_skills.values()) + list(shared_skills.values())
     combined_sorted = sorted(all_known, key=lambda s: s['use_count'], reverse=True)
     top5 = combined_sorted[:5]
 
@@ -297,7 +436,7 @@ def _build_skill_lists(
             'list': list(shared_sorted),
         },
         # Legacy fields (backward compat per-profile badge)
-        'total': len(local_sorted) + len(shared_sorted) + len(primary_sorted) + len(frontline_sorted),
+        'total': len(local_sorted) + len(shared_sorted) + len(primary_sorted) + len(frontline_sorted) + len(worker_sorted) + len(operator_sorted),
         'categories': sorted(all_categories),
         'top': [_legacy(s) for s in top5],
         'list': [_legacy(s) for s in combined_sorted],
@@ -323,15 +462,72 @@ def _build_skill_lists(
     else:
         result['frontline'] = None
 
+    # Add worker section only when there are worker skills
+    if worker_names:
+        result['worker'] = {
+            'total': len(worker_sorted),
+            'categories': sorted(worker_categories),
+            'list': list(worker_sorted),
+        }
+    else:
+        result['worker'] = None
+
+    # Add operator section only when there are operator skills
+    if operator_names:
+        result['operator'] = {
+            'total': len(operator_sorted),
+            'categories': sorted(operator_categories),
+            'list': list(operator_sorted),
+        }
+    else:
+        result['operator'] = None
+
     return result
 
 
 # ── Skill per profilo ──────────────────────────────────────────────
-def _load_profile_skills(name: str) -> dict | None:
-    """Legge le skill installate per un profilo, separate in locali, condivise, frontline e primarie.
+def _merged_usage() -> dict:
+    """Somma di tutti gli .usage.json (global + profili), skip archived.
 
-    Locali: skills/ del profilo. Condivise/frontline/primarie: external_dirs dal config.yaml
-    (frontline = skills-frontline, primarie = skills-generalist).
+    ponytail: i conteggi seguono la skill ovunque sia (anche dopo uno
+    spostamento di cartella); un solo punto di merge invece di N fix
+    per-profilo nel frontend.
+    """
+    merged: dict = {}
+    files = [GLOBAL_SKILLS_DIR / '.usage.json']
+    if PROFILES_DIR.is_dir():
+        files += [e / 'skills' / '.usage.json' for e in PROFILES_DIR.iterdir() if e.is_dir()]
+    for fp in files:
+        try:
+            with open(fp) as f:
+                loaded = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(loaded, dict):
+            continue
+        for k, u in loaded.items():
+            if not isinstance(u, dict) or u.get('state') == 'archived':
+                continue
+            # 'cat/skill' e 'skill' sono la stessa skill: normalizza
+            base = k.split('/')[-1]
+            cur = merged.get(base)
+            if cur is None:
+                merged[base] = dict(u)
+            else:
+                for field in ('use_count', 'view_count', 'patch_count'):
+                    cur[field] = cur.get(field, 0) + u.get(field, 0)
+                for ts in ('last_used_at', 'last_viewed_at', 'last_patched_at', 'created_at'):
+                    a, b = cur.get(ts), u.get(ts)
+                    if b and (not a or b > a):
+                        cur[ts] = b
+    return merged
+
+
+def _load_profile_skills(name: str) -> dict | None:
+    """Legge le skill installate per un profilo, separate in locali, condivise, frontline, worker, operator e primarie.
+
+    Locali: skills/ del profilo. Condivise/frontline/worker/operator/primarie: external_dirs dal config.yaml
+    (frontline = skills-frontline, worker = skills-worker, operator = skills-operators, primarie = skills-generalist).
     """
     skills_dir = PROFILES_DIR / name / 'skills'
 
@@ -369,21 +565,40 @@ def _load_profile_skills(name: str) -> dict | None:
     # Scansiona directory locali (unica passata: nomi + descrizioni)
     local_names, local_categories, local_cat_map, desc_local = _scan_skills(skills_dir)
 
-    # Separa directory primarie/frontline da quelle condivise
+    # Separa directory primarie/frontline/worker/operator da quelle condivise
     primary_dirs: list[Path] = []
     frontline_dirs: list[Path] = []
+    worker_dirs: list[Path] = []
+    operator_dirs: list[Path] = []
     shared_dirs: list[Path] = []
     primary_ref = PRIMARY_SKILLS_DIR.resolve()
     try:
         frontline_ref = FRONTLINE_SKILLS_DIR.resolve()
     except OSError:
         frontline_ref = None
+    try:
+        worker_ref = WORKER_SKILLS_DIR.resolve()
+    except OSError:
+        worker_ref = None
+    try:
+        operator_ref = OPERATOR_SKILLS_DIR.resolve()
+    except OSError:
+        operator_ref = None
+    prof_base = PROFILES_DIR.resolve()
     for d in external_dirs:
         rd = d.resolve()
+        # Locali di altri profili (es. coder, researcher per il ceo): lette a
+        # runtime, ma mostrate nelle loro sezioni — non in shared (cfr. default).
+        if rd.name == 'skills' and rd.parent.parent == prof_base:
+            continue
         if rd == primary_ref:
             primary_dirs.append(d)
         elif frontline_ref is not None and rd == frontline_ref:
             frontline_dirs.append(d)
+        elif worker_ref is not None and rd == worker_ref:
+            worker_dirs.append(d)
+        elif operator_ref is not None and rd == operator_ref:
+            operator_dirs.append(d)
         else:
             shared_dirs.append(d)
 
@@ -429,12 +644,46 @@ def _load_profile_skills(name: str) -> dict | None:
         for k, v in desc.items():
             desc_frontline.setdefault(k, v)
 
-    # Merge descriptions: shared < frontline < primary < local
+    # Scansiona directory worker — unica passata
+    worker_names: set[str] = set()
+    worker_categories: set[str] = set()
+    worker_cat_map: dict[str, str] = {}
+    desc_worker: dict[str, str] = {}
+    for w_dir in worker_dirs:
+        sn, sc, scm, desc = _scan_skills(w_dir)
+        worker_names |= sn
+        worker_categories |= sc
+        for k, v in scm.items():
+            worker_cat_map.setdefault(k, v)
+        for k, v in desc.items():
+            desc_worker.setdefault(k, v)
+
+    # Scansiona directory operator — unica passata
+    operator_names: set[str] = set()
+    operator_categories: set[str] = set()
+    operator_cat_map: dict[str, str] = {}
+    desc_operator: dict[str, str] = {}
+    for op_dir in operator_dirs:
+        sn, sc, scm, desc = _scan_skills(op_dir)
+        operator_names |= sn
+        operator_categories |= sc
+        for k, v in scm.items():
+            operator_cat_map.setdefault(k, v)
+        for k, v in desc.items():
+            desc_operator.setdefault(k, v)
+
+    # Merge descriptions: shared < operator < worker < frontline < primary < local
     merged_desc: dict[str, str] = {}
     merged_desc.update(desc_shared)
+    merged_desc.update(desc_operator)
+    merged_desc.update(desc_worker)
     merged_desc.update(desc_frontline)
     merged_desc.update(desc_primary)
     merged_desc.update(desc_local)
+
+    # Bundle condivisi: conteggi dal merge globale; locali: solo propri
+    own_usage = usage
+    usage = _merged_usage()
 
     return _build_skill_lists(
         local_names, shared_names, primary_names,
@@ -442,6 +691,9 @@ def _load_profile_skills(name: str) -> dict | None:
         usage, merged_desc,
         local_cat_map, shared_cat_map, primary_cat_map,
         frontline_names, frontline_categories, frontline_cat_map,
+        worker_names, worker_categories, worker_cat_map,
+        operator_names, operator_categories, operator_cat_map,
+        own_usage=own_usage,
     )
 
 
@@ -511,13 +763,19 @@ def _load_default_profile() -> dict | None:
     model = mc.get('default') if isinstance(mc, dict) else None
     provider = mc.get('provider') if isinstance(mc, dict) else None
 
-    # Skill locali / condivise / primarie / frontline — unica passata rglob ciascuna
+    # Skill locali / condivise / primarie / frontline / worker / operator — unica passata rglob ciascuna
+    # Locali di default = solo ~/.hermes/skills/ (quelle di coder/researcher
+    # restano nelle loro sezioni; la tabella Chi-legge-cosa documenta l'eccezione).
     local_names, local_categories, local_cat_map, desc_local = _scan_skills(GLOBAL_SKILLS_DIR)
     shared_names, shared_categories, shared_cat_map, desc_shared = _scan_skills(SHARED_SKILLS_DIR)
     frontline_names, frontline_categories, frontline_cat_map, desc_frontline = _scan_skills(FRONTLINE_SKILLS_DIR)
+    worker_names, worker_categories, worker_cat_map, desc_worker = _scan_skills(WORKER_SKILLS_DIR)
+    operator_names, operator_categories, operator_cat_map, desc_operator = _scan_skills(OPERATOR_SKILLS_DIR)
     primary_names, primary_categories, primary_cat_map, desc_primary = _scan_skills(PRIMARY_SKILLS_DIR)
     merged_desc: dict[str, str] = {}
     merged_desc.update(desc_shared)
+    merged_desc.update(desc_operator)
+    merged_desc.update(desc_worker)
     merged_desc.update(desc_frontline)
     merged_desc.update(desc_primary)
     merged_desc.update(desc_local)
@@ -534,7 +792,7 @@ def _load_default_profile() -> dict | None:
         except (OSError, json.JSONDecodeError):
             pass
 
-    skills = _build_skill_lists(local_names, shared_names, primary_names, local_categories, shared_categories, primary_categories, usage, merged_desc, local_cat_map, shared_cat_map, primary_cat_map, frontline_names, frontline_categories, frontline_cat_map)
+    skills = _build_skill_lists(local_names, shared_names, primary_names, local_categories, shared_categories, primary_categories, _merged_usage(), merged_desc, local_cat_map, shared_cat_map, primary_cat_map, frontline_names, frontline_categories, frontline_cat_map, worker_names, worker_categories, worker_cat_map, operator_names, operator_categories, operator_cat_map, own_usage=usage)
 
     # Legge gateway_state.json della root (helper condiviso)
     gateway, platforms = _read_gateway(Path.home() / '.hermes' / 'gateway_state.json')

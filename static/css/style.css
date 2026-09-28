@@ -57,6 +57,7 @@
       flex-wrap: wrap;
     }
     .controls-actions { flex: 1 1 auto; min-width: 0; }
+    .controls-status { min-width: 0; }
     .controls button {
       background: #21262d;
       border: 1px solid #30363d;
@@ -75,12 +76,6 @@
     .controls button.icon-btn {
       padding: 8px 11px;
     }
-    /* Azione rara (health): peso secondario */
-    .controls button.btn-secondary {
-      background: transparent;
-      font-size: 13px;
-      padding: 7px 12px;
-    }
     .controls button:focus-visible {
       outline: 2px solid #58a6ff;
       outline-offset: 2px;
@@ -95,6 +90,7 @@
     #last-update {
       font-size: 12px;
       color: #8b949e;
+      white-space: nowrap;
     }
 
     /* ── Credits badge ─────────────── */

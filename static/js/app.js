@@ -7,7 +7,6 @@
     //   scroll e righe espanse restano intatti.
 
     import { fetchJSON, NOT_MODIFIED, dropEtag } from './api.js';
-    import { fmtAge } from './utils.js';
     import {
       buildBoard, renderKanbanBoard, renderKanbanSkeleton,
       renderKanbanError, initKanban,
@@ -15,7 +14,9 @@
     import {
       renderProfiles, renderProfilesSkeleton, renderProfilesError,
       renderSkillListByProfile, renderSkillMatrixShared, renderSkillMatrixFrontline,
+      renderSkillMatrixWorker, renderSkillMatrixOperator,
       renderSkillPrimary, renderSkillBundles, renderSectionError,
+      renderSkillMap,
       setLocalFilterHold, restoreLocalDetails,
       initSkills,
     } from './skills.js';
@@ -26,7 +27,7 @@
     } from './widgets.js';
     import {
       openSkillModal, openSoulModal, openAgentsModal,
-      openTaskModal, confirmDialog, initModals,
+      openTaskModal, initModals,
     } from './modals.js';
 
     const FAST_INTERVAL = 10000;
@@ -37,10 +38,11 @@
     const kanbanBoard  = document.getElementById('kanban-board');
     const lastUpdateEl = document.getElementById('last-update');
     const refreshBtn   = document.getElementById('refresh-btn');
-    const healthBtn    = document.getElementById('health-btn');
     const skillLocalContent   = document.getElementById('skill-local-content');
     const skillSharedContent  = document.getElementById('skill-shared-content');
     const skillFrontlineContent = document.getElementById('skill-frontline-content');
+    const skillWorkerContent = document.getElementById('skill-worker-content');
+    const skillOperatorContent = document.getElementById('skill-operator-content');
     const skillPrimaryContent = document.getElementById('skill-primary-content');
     const skillBundlesContent = document.getElementById('skill-bundles-content');
     const creditsBadge = document.getElementById('credits-badge');
@@ -72,7 +74,10 @@
         renderSkillListByProfile(skillLocalContent, data.profiles || [], openSkillModal);
         renderSkillMatrixShared(skillSharedContent, data.profiles || [], openSkillModal);
         renderSkillMatrixFrontline(skillFrontlineContent, data.profiles || [], openSkillModal);
+        renderSkillMatrixWorker(skillWorkerContent, data.profiles || [], openSkillModal);
+        renderSkillMatrixOperator(skillOperatorContent, data.profiles || [], openSkillModal);
         renderSkillPrimary(skillPrimaryContent, data.profiles || [], openSkillModal);
+        renderSkillMap(data.profiles || []);
         hasData.fast = true;
         touchLastUpdate();
         const fi = document.getElementById('filter-input');
@@ -85,6 +90,8 @@
           renderSectionError(skillLocalContent, 'Skill locali', err.message, 'fast');
           renderSectionError(skillSharedContent, 'Skill condivise', err.message, 'fast');
           renderSectionError(skillFrontlineContent, 'Skill frontline', err.message, 'fast');
+          renderSectionError(skillWorkerContent, 'Skill worker', err.message, 'fast');
+          renderSectionError(skillOperatorContent, 'Skill operator', err.message, 'fast');
           renderSectionError(skillPrimaryContent, 'Skill generalist', err.message, 'fast');
         }
       } finally {
@@ -160,36 +167,6 @@
       await Promise.allSettled([refreshFast(), refreshSlow()]);
     }
 
-    // ── Test health (con conferma: chiama API esterne) ──────────
-    async function testHealth() {
-      healthBtn.classList.add('loading');
-      healthBtn.disabled = true;
-      try {
-        // Età dell'ultimo test (risposta cachata, economica) per il confirm
-        let ageTxt = 'sconosciuta';
-        try {
-          const cached = await fetchJSON('/api/health', { retries: 0 });
-          if (cached && cached !== NOT_MODIFIED && cached._ts) {
-            ageTxt = fmtAge(cached._ts);
-            const btn = healthBtn;
-            if (btn) btn.title = 'Ultimo test: ' + ageTxt;
-          }
-        } catch (e) { /* si procede comunque al test */ }
-        if (!await confirmDialog('Lanciare il test health sui provider? (ultimo test: ' + ageTxt + ')', {
-          title: 'Testa health', okText: 'Testa',
-        })) return;
-        dropEtag('/api/status');
-        const health = await fetchJSON('/api/health?force=1');
-        if (health && health !== NOT_MODIFIED) renderHealthPill(healthPill, health);
-        await refreshAll();
-      } catch (err) {
-        console.error('Health test failed:', err);
-      } finally {
-        healthBtn.disabled = false;
-        healthBtn.classList.remove('loading');
-      }
-    }
-
     // ── Init ─────────────────────────────────────────────────────
     buildBoard(kanbanBoard);
     initModals();
@@ -237,7 +214,7 @@
           if (countEl) countEl.textContent = q ? cards.length : col.querySelectorAll('.kanban-card').length;
           if (emptyEl && q) emptyEl.style.display = cards.length ? 'none' : 'block';
         });
-        document.querySelectorAll('#skill-bundles-content, #skill-shared-content, #skill-frontline-content, #skill-primary-content').forEach(box => {
+        document.querySelectorAll('#skill-bundles-content, #skill-shared-content, #skill-frontline-content, #skill-worker-content, #skill-operator-content, #skill-primary-content').forEach(box => {
           const anyVisible = [...box.querySelectorAll('.skill-card, .skill-bundle-card')].some(c => c.style.display !== 'none');
           const section = box.closest('section');
           if (!section) return;
@@ -289,7 +266,6 @@
 
     // Controlli statici
     refreshBtn.addEventListener('click', () => refreshAll());
-    healthBtn.addEventListener('click', () => testHealth());
 
     // Retry delegato per i box di errore
     document.addEventListener('click', e => {

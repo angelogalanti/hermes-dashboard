@@ -21,9 +21,6 @@
         <button id="refresh-btn" class="icon-btn" title="Forza aggiornamento (ignora cache)" aria-label="Forza aggiornamento">
           <i class="fas fa-sync-alt" aria-hidden="true"></i>
         </button>
-        <button id="health-btn" class="btn-secondary" title="Lancia il test health sui provider (chiama API esterne)">
-          <i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Testa health
-        </button>
       </div>
       <div class="controls-status">
         <span id="gateway-pill" class="status-pill" title="Stato gateway"></span>
@@ -60,6 +57,50 @@
       </div>
     </section>
 
+    <!-- Mappa profili ↔ cartelle skill -->
+    <section id="skill-map-section">
+      <h2><i class="fa-solid fa-table"></i> Chi legge cosa</h2>
+      <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
+        <i class="fa-solid fa-table" style="color:#d2a8ff;"></i>
+        Ogni profilo legge le sue <strong>locali</strong> più i bundle del suo tipo.
+        Frontline (<strong>default</strong>, <strong>ceo</strong>, <strong>teacher</strong>) parlano con te;
+        worker (<strong>coder</strong>, <strong>researcher</strong>) solo via kanban.
+        Gli orchestratori (<strong>default</strong>, <strong>ceo</strong>) leggono anche le locali dei worker,
+        così possono nominarle nei task kanban: la skill vive una volta sola, dall'esecutore.
+      </p>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Cartella</th>
+              <th colspan="3">frontline <span style="font-weight:normal">(parlano con te)</span></th>
+              <th colspan="2">worker <span style="font-weight:normal">(solo kanban)</span></th>
+            </tr>
+            <tr>
+              <th></th>
+              <th>default</th>
+              <th>ceo</th>
+              <th>teacher</th>
+              <th>coder</th>
+              <th>researcher</th>
+            </tr>
+          </thead>
+          <tbody id="skill-map-body">
+            <tr><td>skills-shared <span style="color:#8b949e" data-count="shared">—</span></td><td data-cell="shared:default">—</td><td data-cell="shared:ceo">—</td><td data-cell="shared:teacher">—</td><td data-cell="shared:coder">—</td><td data-cell="shared:researcher">—</td></tr>
+            <tr><td>skills-frontline <span style="color:#8b949e" data-count="frontline">—</span></td><td data-cell="frontline:default">—</td><td data-cell="frontline:ceo">—</td><td data-cell="frontline:teacher">—</td><td data-cell="frontline:coder">—</td><td data-cell="frontline:researcher">—</td></tr>
+            <tr><td>skills-generalist <span style="color:#8b949e" data-count="generalist">—</span></td><td data-cell="generalist:default">—</td><td data-cell="generalist:ceo">—</td><td data-cell="generalist:teacher">—</td><td data-cell="generalist:coder">—</td><td data-cell="generalist:researcher">—</td></tr>
+            <tr><td>skills-worker <span style="color:#8b949e" data-count="worker">—</span></td><td data-cell="worker:default">—</td><td data-cell="worker:ceo">—</td><td data-cell="worker:teacher">—</td><td data-cell="worker:coder">—</td><td data-cell="worker:researcher">—</td></tr>
+            <tr><td>locali default <span style="color:#8b949e" data-count="locali-default">—</span></td><td data-cell="locali-default:default">—</td><td data-cell="locali-default:ceo">—</td><td data-cell="locali-default:teacher">—</td><td data-cell="locali-default:coder">—</td><td data-cell="locali-default:researcher">—</td></tr>
+            <tr><td>locali ceo <span style="color:#8b949e" data-count="locali-ceo">—</span></td><td data-cell="locali-ceo:default">—</td><td data-cell="locali-ceo:ceo">—</td><td data-cell="locali-ceo:teacher">—</td><td data-cell="locali-ceo:coder">—</td><td data-cell="locali-ceo:researcher">—</td></tr>
+            <tr><td>locali teacher <span style="color:#8b949e" data-count="locali-teacher">—</span></td><td data-cell="locali-teacher:default">—</td><td data-cell="locali-teacher:ceo">—</td><td data-cell="locali-teacher:teacher">—</td><td data-cell="locali-teacher:coder">—</td><td data-cell="locali-teacher:researcher">—</td></tr>
+            <tr><td>locali coder <span style="color:#8b949e" data-count="locali-coder">—</span></td><td data-cell="locali-coder:default">—</td><td data-cell="locali-coder:ceo">—</td><td data-cell="locali-coder:teacher">—</td><td data-cell="locali-coder:coder">—</td><td data-cell="locali-coder:researcher">—</td></tr>
+            <tr><td>locali researcher <span style="color:#8b949e" data-count="locali-researcher">—</span></td><td data-cell="locali-researcher:default">—</td><td data-cell="locali-researcher:ceo">—</td><td data-cell="locali-researcher:teacher">—</td><td data-cell="locali-researcher:coder">—</td><td data-cell="locali-researcher:researcher">—</td></tr>
+            <tr><td><strong>Totale profilo</strong></td><td data-total="default">—</td><td data-total="ceo">—</td><td data-total="teacher">—</td><td data-total="coder">—</td><td data-total="researcher">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- Sezione Skill Bundles -->
     <section id="skill-bundles-section">
       <h2><i class="fa-solid fa-layer-group"></i> Skill Bundles</h2>
@@ -75,7 +116,8 @@
     <section id="skill-shared-section">
       <h2><i class="fa-solid fa-share-nodes"></i> Skill Condivise</h2>
       <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
-        Skill condivise (skills-shared) &mdash; comuni a tutti i profili. <span style="color:#484f58;">Le stesse skill sono disponibili per ogni profilo.</span>
+        Skill condivise (skills-shared) &mdash; comuni a tutti i profili. <span style="color:#484f58;">Le stesse skill sono disponibili per ogni profilo.</span><br>
+        <span style="font-size:12px;"><span style="color:#3fb950;">&#9679;</span> nativa Hermes &nbsp;<span style="color:#d29922;">&#9679;</span> scaricata &nbsp;<span style="color:#58a6ff;">&#9679;</span> creata da noi</span>
       </p>
       <div id="skill-shared-content"></div>
     </section>
@@ -87,6 +129,24 @@
         Skill operative per i profili che parlano con l'utente (<strong>default</strong>, <strong>ceo</strong>, <strong>teacher</strong>) &mdash; non visibili ai worker.
       </p>
       <div id="skill-frontline-content"></div>
+    </section>
+
+    <!-- Sezione Skill Worker (coder, researcher) -->
+    <section id="skill-worker-section">
+      <h2><i class="fa-solid fa-gears"></i> Skill Worker</h2>
+      <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
+        Skill operative per i profili worker (<strong>coder</strong>, <strong>researcher</strong>) &mdash; non visibili ai profili frontline.
+      </p>
+      <div id="skill-worker-content"></div>
+    </section>
+
+    <!-- Sezione Skill Operator (default, coder) -->
+    <section id="skill-operator-section">
+      <h2><i class="fa-solid fa-user-gear"></i> Skill Operator</h2>
+      <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
+        Skill operative condivise tra <strong>default</strong> e <strong>coder</strong>.
+      </p>
+      <div id="skill-operator-content"></div>
     </section>
 
     <!-- Sezione Skill Generalist (solo default + ceo) -->

@@ -92,10 +92,23 @@
         profileSpan.textContent = 'Skill generalist — solo default e ceo';
       } else if (type === 'frontline') {
         profileSpan.textContent = 'Skill frontline — default, ceo e teacher';
+      } else if (type === 'worker') {
+        profileSpan.textContent = 'Skill worker — coder e researcher';
+      } else if (type === 'operator') {
+        profileSpan.textContent = 'Skill operator — default e coder';
       } else if (type === 'shared') {
         profileSpan.textContent = 'Skill condivisa — presente in tutti i profili';
       } else if (type === 'bundle') {
         profileSpan.textContent = 'Disponibile globalmente — carica le skill abilitate nel profilo corrente';
+      }
+      // Fonte delle scaricate: author + link verificato (solo se presenti in API)
+      if (type !== 'bundle' && skillObj.source && skillObj.source.author) {
+        const srcUrl = skillObj.source.url && skillObj.source.url.startsWith('https://')
+          ? skillObj.source.url : null;
+        profileSpan.innerHTML = esc(profileSpan.textContent) + ' · Fonte: ' +
+          (srcUrl
+            ? '<a href="' + esc(srcUrl) + '" target="_blank" rel="noopener" style="color:#58a6ff;">' + esc(skillObj.source.author) + ' ↗</a>'
+            : esc(skillObj.source.author));
       }
 
       overlay.classList.add('open');

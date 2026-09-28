@@ -26,6 +26,17 @@
       return Math.floor(diff / 86400) + 'g';
     }
 
+    // "3m", "2h", "5g" — per i badge di freschezza dati (stesso stile di timeAgo).
+    // ts è un timestamp unix in secondi (campo `_ts` delle API).
+    export function fmtAgeShort(ts) {
+      if (!ts) return '';
+      const diff = Math.floor(Date.now() / 1000 - ts);
+      if (diff < 60) return 'ora';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+      return Math.floor(diff / 86400) + 'g';
+    }
+
     // "aggiornato 3 min fa" — per i badge di freschezza dati.
     // ts è un timestamp unix in secondi (campo `_ts` delle API).
     export function fmtAge(ts) {

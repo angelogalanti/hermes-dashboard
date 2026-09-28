@@ -184,7 +184,7 @@
     }
 
     // Visibilità dei bucket condivisi (per il confirm di cancellazione)
-    const VISIBILITY = { shared: 'TUTTI i profili', frontline: 'default, ceo e teacher', primary: 'default e ceo' };
+    const VISIBILITY = { shared: 'TUTTI i profili', frontline: 'default, ceo e teacher', worker: 'coder e researcher', operator: 'default e coder', primary: 'default e ceo' };
 
     // Pinned prima, poi più usate
     function sortSkills(list) {
@@ -194,12 +194,25 @@
     }
 
     // ── Card skill (mai usate opacizzate, pinned con iconcina) ──
+    // Dot provenienza: verde=nativa Hermes, arancione=scaricata, blu=creata da noi.
+    const PROV_COLOR = { native: '#3fb950', external: '#d29922', ours: '#58a6ff' };
+    const PROV_LABEL = { native: 'nativa Hermes', external: 'scaricata', ours: 'creata da noi' };
     function buildSkillCard(sk, { icon, iconColor, metaHtml, delAttrs, onOpen }) {
       const card = document.createElement('div');
       card.className = 'skill-card' + (sk.use_count > 0 ? '' : ' unused');
       card.title = sk.use_count > 0 ? '' : 'Mai usata';
       const useLabel = sk.use_count > 0 ? 'usata ' + sk.use_count + ' volte' : 'mai usata';
       const ago = sk.last_used_at ? timeAgo(sk.last_used_at) : '';
+      const prov = sk.provenance || 'ours'; // payload vecchi senza campo
+      const provDot = '<span title="Provenienza: ' + PROV_LABEL[prov] + '" style="width:8px;height:8px;border-radius:50%;flex:none;background:' + (PROV_COLOR[prov] || PROV_COLOR.ours) + ';"></span>';
+      // Fonte inline (solo scaricate con author): link diretto, senza aprire il modal
+      let srcHtml = '';
+      if (sk.source && sk.source.author) {
+        const srcUrl = sk.source.url && sk.source.url.startsWith('https://') ? sk.source.url : null;
+        srcHtml = srcUrl
+          ? '<a href="' + esc(srcUrl) + '" target="_blank" rel="noopener" title="Fonte: ' + esc(sk.source.author) + '" style="color:#484f58;text-decoration:none;">↗ ' + esc(sk.source.author) + '</a>'
+          : '<span title="Fonte non registrata" style="color:#484f58;">' + esc(sk.source.author) + '</span>';
+      }
       const pinHtml = sk.pinned
         ? '<i class="fa-solid fa-thumbtack" style="color:#d29922;font-size:11px;" title="Pinned"></i> '
         : '';
@@ -208,6 +221,7 @@
         '<i class="fa-solid fa-trash-can"></i>' +
         '</button>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
+        provDot +
         '<i class="' + icon + '" style="color:' + iconColor + ';font-size:13px;"></i>' +
         '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + pinHtml + esc(sk.name) + '</span>' +
         (metaHtml || '') +
@@ -215,9 +229,10 @@
         '<div style="display:flex;gap:12px;font-size:12px;color:#8b949e;">' +
         '<span><i class="fa-regular fa-star"></i> ' + esc(useLabel) + '</span>' +
         (ago ? '<span style="color:#484f58;">' + esc(ago) + '</span>' : '') +
+        (srcHtml ? '<span>' + srcHtml + '</span>' : '') +
         '</div>';
       if (onOpen) card.addEventListener('click', e => {
-        if (e.target.closest('[data-del]')) return; // cestino: gestito in delega, non aprire il modal
+        if (e.target.closest('[data-del]') || e.target.closest('a')) return; // cestino e link fonte: non aprire il modal
         onOpen(sk);
       });
       if (onOpen) {
@@ -271,17 +286,30 @@
           det.appendChild(emptyEl);
         } else {
           const sorted = sortSkills(list);
-          const grid = document.createElement('div');
-          grid.className = 'skill-grid';
+          // Raggruppa per categoria (ordine di prima apparizione = già per uso)
+          const groups = new Map();
           sorted.forEach(sk => {
-            grid.appendChild(buildSkillCard(sk, {
-              icon: 'fa-solid fa-puzzle-piece',
-              iconColor: '#d2a8ff',
-              delAttrs: deleteButtonAttrs(p.name, sk, 'local'),
-              onOpen: s => onOpenSkill(s, p.name, 'local'),
-            }));
+            const cat = sk.category || 'altro';
+            if (!groups.has(cat)) groups.set(cat, []);
+            groups.get(cat).push(sk);
           });
-          det.appendChild(grid);
+          groups.forEach((skills, cat) => {
+            const h = document.createElement('div');
+            h.style.cssText = 'font-size:12px;color:#8b949e;margin:10px 0 6px;text-transform:uppercase;letter-spacing:.04em;';
+            h.textContent = cat + ' (' + skills.length + ')';
+            det.appendChild(h);
+            const grid = document.createElement('div');
+            grid.className = 'skill-grid';
+            skills.forEach(sk => {
+              grid.appendChild(buildSkillCard(sk, {
+                icon: 'fa-solid fa-puzzle-piece',
+                iconColor: '#d2a8ff',
+                delAttrs: deleteButtonAttrs(p.name, sk, 'local'),
+                onOpen: s => onOpenSkill(s, p.name, 'local'),
+              }));
+            });
+            det.appendChild(grid);
+          });
         }
         det.addEventListener('toggle', () => {
           if (localFilterHold) return;
@@ -289,6 +317,81 @@
           else closedLocal.add(p.name);
         });
         contentEl.appendChild(det);
+      });
+    }
+
+    // ── Mappa Chi-legge-cosa: conteggi vivi da API ────────────────────
+    // Badge = quante skill nella cartella; ogni cella = quante ne vede il
+    // profilo da quella cartella (— se non la legge); Totale = skill uniche
+    // visibili dal profilo (dedup per nome tra i suoi bucket).
+    export function renderSkillMap(profiles) {
+      const body = document.getElementById('skill-map-body');
+      if (!body) return;
+      const byName = (name) => profiles.find(p => p.name === name);
+      const listOf = (p, bucket) => {
+        const b = p && p.skills && p.skills[bucket];
+        return (b && b.list) || [];
+      };
+      const namesOf = (p, bucket) => new Set(listOf(p, bucket).map(sk => sk.name));
+      const bucketLen = (bucket) => {
+        const p = profiles.find(p => listOf(p, bucket).length);
+        return p ? listOf(p, bucket).length : 0;
+      };
+      const localLen = (name) => listOf(byName(name), 'local').length;
+      // Locali proprie di default = sue meno quelle ereditate da coder/researcher
+      const coderNames = namesOf(byName('coder'), 'local');
+      const researcherNames = namesOf(byName('researcher'), 'local');
+      const ownDefault = listOf(byName('default'), 'local')
+        .filter(sk => !coderNames.has(sk.name) && !researcherNames.has(sk.name)).length;
+      const counts = {
+        'shared': bucketLen('shared'),
+        'frontline': bucketLen('frontline'),
+        'generalist': bucketLen('primary'),
+        'worker': bucketLen('worker'),
+        'locali-default': ownDefault,
+        'locali-ceo': localLen('ceo'),
+        'locali-teacher': localLen('teacher'),
+        'locali-coder': localLen('coder'),
+        'locali-researcher': localLen('researcher'),
+      };
+      // Chi legge quale riga (default eredita locali coder + researcher)
+      const reads = {
+        'shared': ['default', 'ceo', 'teacher', 'coder', 'researcher'],
+        'frontline': ['default', 'ceo', 'teacher'],
+        'generalist': ['default', 'ceo'],
+        'worker': ['default', 'coder', 'researcher'],
+        'locali-default': ['default'],
+        'locali-ceo': ['ceo'],
+        'locali-teacher': ['teacher'],
+        'locali-coder': ['coder', 'default', 'ceo'],
+        'locali-researcher': ['researcher', 'default', 'ceo'],
+      };
+      body.querySelectorAll('[data-count]').forEach(el => {
+        el.textContent = '(' + (counts[el.dataset.count] ?? 0) + ')';
+      });
+      body.querySelectorAll('[data-cell]').forEach(td => {
+        const sep = td.dataset.cell.indexOf(':');
+        const row = td.dataset.cell.slice(0, sep);
+        const prof = td.dataset.cell.slice(sep + 1);
+        if ((reads[row] || []).includes(prof)) {
+          td.textContent = counts[row] ?? 0;
+          td.style.color = '#3fb950';
+        } else {
+          td.textContent = '—';
+          td.style.color = '#484f58';
+        }
+      });
+      ['default', 'ceo', 'teacher', 'coder', 'researcher'].forEach(name => {
+        const td = body.querySelector('td[data-total="' + name + '"]');
+        if (!td) return;
+        const p = profiles.find(p => p.name === name);
+        if (!p || !p.skills) { td.textContent = '—'; return; }
+        const names = new Set();
+        ['local', 'shared', 'frontline', 'primary', 'worker', 'operator'].forEach(b => {
+          const list = p.skills[b] && p.skills[b].list;
+          if (list) list.forEach(sk => names.add(sk.name));
+        });
+        td.textContent = names.size;
       });
     }
 
@@ -317,6 +420,11 @@
           if (profileCounts[sk.name]) {
             profileCounts[sk.name].count++;
             profileCounts[sk.name].profiles.push(p.name);
+            // ponytail: max tra profili, non somma — basta sapere che si usa
+            if ((sk.use_count || 0) > (profileCounts[sk.name].maxUse || 0)) {
+              profileCounts[sk.name].maxUse = sk.use_count;
+              profileCounts[sk.name].lastUsed = sk.last_used_at;
+            }
           }
         });
       });
@@ -328,6 +436,11 @@
 
       bucketList.forEach(sk => {
         const pc = profileCounts[sk.name] || { count: 0, profiles: [] };
+        // uso reale = max tra profili (la lista base è del primo profilo solo)
+        sk = Object.assign({}, sk, {
+          use_count: pc.maxUse || sk.use_count || 0,
+          last_used_at: pc.lastUsed || sk.last_used_at,
+        });
         const countLabel = pc.count + '/' + profilesWithBucket.length + ' profili';
         const card = buildSkillCard(sk, {
           icon: 'fa-solid fa-puzzle-piece',
@@ -360,6 +473,16 @@
       return renderSkillMatrix(contentEl, profiles, onOpenSkill, 'frontline', 'frontline');
     }
 
+    // ── Render Skill Worker (coder, researcher) ──────────────────────
+    export function renderSkillMatrixWorker(contentEl, profiles, onOpenSkill) {
+      return renderSkillMatrix(contentEl, profiles, onOpenSkill, 'worker', 'worker');
+    }
+
+    // ── Render Skill Operator (default, coder) ───────────────────────
+    export function renderSkillMatrixOperator(contentEl, profiles, onOpenSkill) {
+      return renderSkillMatrix(contentEl, profiles, onOpenSkill, 'operator', 'operator');
+    }
+
     // ── Render Skill Primarie (card) ─────────────────────────────
     export function renderSkillPrimary(contentEl, profiles, onOpenSkill) {
       const section = contentEl.closest('section');
@@ -378,7 +501,22 @@
       const grid = document.createElement('div');
       grid.className = 'skill-grid';
 
+      // uso reale = max tra profili (la lista base è del default solo)
+      const maxUse = {};
+      profiles.forEach(p => {
+        ((p.skills && p.skills.primary && p.skills.primary.list) || []).forEach(sk => {
+          if ((sk.use_count || 0) > (maxUse[sk.name] || 0)) {
+            maxUse[sk.name] = sk.use_count;
+            maxUse[sk.name + '|last'] = sk.last_used_at;
+          }
+        });
+      });
+
       primaryList.forEach(sk => {
+        sk = Object.assign({}, sk, {
+          use_count: maxUse[sk.name] || sk.use_count || 0,
+          last_used_at: maxUse[sk.name + '|last'] || sk.last_used_at,
+        });
         grid.appendChild(buildSkillCard(sk, {
           icon: 'fa-solid fa-crown',
           iconColor: '#d29922',
@@ -477,7 +615,7 @@
       }
 
       // Cestini delle skill (delegati: le card vengono ri-renderizzate)
-      ['skill-local-content', 'skill-shared-content', 'skill-frontline-content', 'skill-primary-content'].forEach(id => {
+      ['skill-local-content', 'skill-shared-content', 'skill-frontline-content', 'skill-worker-content', 'skill-operator-content', 'skill-primary-content'].forEach(id => {
         const container = document.getElementById(id);
         if (!container) return;
         container.addEventListener('click', e => {

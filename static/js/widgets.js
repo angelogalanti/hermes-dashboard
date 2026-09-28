@@ -1,10 +1,10 @@
     // ── widgets.js — credits badge, OpenCode usage ───────────────────
-    import { esc, fmtAge } from './utils.js';
+    import { esc, fmtAge, fmtAgeShort } from './utils.js';
 
-    // ── Badge "aggiornato X min fa" ──────────────────────────────
+    // ── Badge "· 3m" (compatto; forma lunga nel title) ──────────────
     // Ogni widget tiene in dataset.ts il _ts dell'ultimo payload valido.
     function staleBadgeHTML(ts) {
-      return '<span class="stale-badge" title="Freschezza dati">· ' + esc(fmtAge(ts)) + '</span>';
+      return '<span class="stale-badge" title="' + esc(fmtAge(ts)) + '">· ' + esc(fmtAgeShort(ts)) + '</span>';
     }
 
     export function rememberTs(container, ts) {
@@ -148,9 +148,10 @@
           if (!w) return;
           const pct = Math.round(w.pct || 0);
           const label = USAGE_SHORT[key] || key;
+          const reset = w.resets_short ? '<span style="color:#484f58;">↺' + esc(w.resets_short) + '</span>' : '';
           parts.push('<span class="credit-service" title="' + esc(key + ' - ' + acc.name + ' - ' + (w.resets_in || '')) + '">' +
             '<span class="status-dot" style="background:' + usageColor(pct) + '"></span>' +
-            esc(label) + ' ' + pct + '%' +
+            esc(label) + ' ' + pct + '%' + reset +
             '</span>');
         });
       });
