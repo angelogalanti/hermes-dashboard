@@ -656,8 +656,7 @@
       box-shadow: 0 2px 8px rgba(88,166,255,0.12);
     }
     .kanban-card:focus-visible,
-    .skill-card:focus-visible,
-    .skill-bundle-card:focus-visible {
+    .skill-card:focus-visible {
       outline: 2px solid #58a6ff;
       outline-offset: 2px;
     }
@@ -867,21 +866,6 @@
       }
     }
 
-    .skill-bundle-card {
-      background: #0d1117;
-      border: 1px solid #2ea043;  /* verde/cyan */
-      border-radius: 6px;
-      padding: 10px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      cursor: pointer;
-      transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    .skill-bundle-card:hover {
-      border-color: #3fb950;
-      box-shadow: 0 0 0 1px rgba(63,185,80,0.3);
-    }
 
     /* ── Heartbeat count badge on kanban card ── */
     .kanban-card-hbcount {

@@ -2,7 +2,7 @@
     //
     // Refresh intelligente:
     // - veloce (10s): /api/status → kanban + profili + skill
-    // - lento (5min): bundles + credits + usage in parallelo
+    // - lento (5min): credits + usage + health in parallelo
     // - 304 Not Modified (ETag) → nessun re-render: modal aperti,
     //   scroll e righe espanse restano intatti.
 
@@ -15,7 +15,7 @@
       renderProfiles, renderProfilesSkeleton, renderProfilesError,
       renderSkillListByProfile, renderSkillMatrixShared, renderSkillMatrixFrontline,
       renderSkillMatrixWorker, renderSkillMatrixOperator,
-      renderSkillPrimary, renderSkillBundles, renderSectionError,
+      renderSkillPrimary, renderSectionError,
       renderSkillMap,
       setLocalFilterHold, restoreLocalDetails,
       initSkills,
@@ -44,14 +44,13 @@
     const skillWorkerContent = document.getElementById('skill-worker-content');
     const skillOperatorContent = document.getElementById('skill-operator-content');
     const skillPrimaryContent = document.getElementById('skill-primary-content');
-    const skillBundlesContent = document.getElementById('skill-bundles-content');
     const creditsBadge = document.getElementById('credits-badge');
     const usageBadge = document.getElementById('usage-badge');
     const gatewayPill = document.getElementById('gateway-pill');
     const healthPill = document.getElementById('health-pill');
 
     // Primo caricamento riuscito per sezione (errori → box solo se mai visti dati)
-    const hasData = { fast: false, bundles: false, credits: false, usage: false };
+    const hasData = { fast: false, credits: false, usage: false };
 
     // ── Ultimo aggiornamento ─────────────────────────────────────
     function touchLastUpdate() {
@@ -99,10 +98,9 @@
       }
     }
 
-    // ── Refresh lento: bundles + credits + usage + health in parallelo ───
+    // ── Refresh lento: credits + usage + health in parallelo ───
     async function refreshSlow() {
-      const [bundlesRes, creditsRes, usageRes, healthRes] = await Promise.allSettled([
-        fetchJSON('/api/skill-bundles'),
+      const [creditsRes, usageRes, healthRes] = await Promise.allSettled([
         fetchJSON('/api/credits'),
         fetchJSON('/api/opencode-usage'),
         fetchJSON('/api/health'),
@@ -114,18 +112,6 @@
         renderHealthPill(healthPill, healthRes.value);
         dropEtag('/api/status');
         refreshFast();
-      }
-
-      // Bundles
-      if (bundlesRes.status === 'fulfilled') {
-        if (bundlesRes.value !== NOT_MODIFIED) {
-          renderSkillBundles(skillBundlesContent, bundlesRes.value, openSkillModal);
-          hasData.bundles = true;
-        }
-      } else if (!hasData.bundles) {
-        renderSectionError(skillBundlesContent, 'Skill bundles', bundlesRes.reason.message, 'slow');
-      } else {
-        console.error('bundles:', bundlesRes.reason);
       }
 
       // Credits
@@ -162,7 +148,7 @@
 
     // ── Refresh manuale = force (droppa ETag: ricarica tutto, non solo il cambiato) ──
     async function refreshAll() {
-      ['/api/status', '/api/skill-bundles', '/api/credits', '/api/opencode-usage']
+      ['/api/status', '/api/credits', '/api/opencode-usage']
         .forEach(dropEtag);
       await Promise.allSettled([refreshFast(), refreshSlow()]);
     }
@@ -188,7 +174,7 @@
       filterInput.addEventListener('input', () => {
         const q = filterInput.value.trim().toLowerCase();
         let n = 0;
-        document.querySelectorAll('.skill-card, .skill-bundle-card, .kanban-card').forEach(el => {
+        document.querySelectorAll('.skill-card, .kanban-card').forEach(el => {
           const show = !q || el.textContent.toLowerCase().includes(q);
           el.style.display = show ? '' : 'none';
           if (q && show) n++;
@@ -214,8 +200,8 @@
           if (countEl) countEl.textContent = q ? cards.length : col.querySelectorAll('.kanban-card').length;
           if (emptyEl && q) emptyEl.style.display = cards.length ? 'none' : 'block';
         });
-        document.querySelectorAll('#skill-bundles-content, #skill-shared-content, #skill-frontline-content, #skill-worker-content, #skill-operator-content, #skill-primary-content').forEach(box => {
-          const anyVisible = [...box.querySelectorAll('.skill-card, .skill-bundle-card')].some(c => c.style.display !== 'none');
+        document.querySelectorAll('#skill-shared-content, #skill-frontline-content, #skill-worker-content, #skill-operator-content, #skill-primary-content').forEach(box => {
+          const anyVisible = [...box.querySelectorAll('.skill-card')].some(c => c.style.display !== 'none');
           const section = box.closest('section');
           if (!section) return;
           if (!('secDisplay' in box.dataset)) box.dataset.secDisplay = section.style.display; // stato pre-filtro (es. sezione vuota nascosta dal render)

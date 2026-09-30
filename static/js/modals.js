@@ -11,69 +11,36 @@
         try { skillObj = JSON.parse(skillObj); } catch (e) { return; }
       }
 
-      const bundleDetails = document.getElementById('modal-bundle-details');
-      const bundleSkills = document.getElementById('modal-bundle-skills');
-      const bundleInstructionContainer = document.getElementById('modal-bundle-instruction-container');
-      const bundleInstruction = document.getElementById('modal-bundle-instruction');
-
       const statsEl = overlay.querySelector('.skill-modal-stats');
       const datesEl = overlay.querySelector('.skill-modal-dates');
       const stateEl = document.getElementById('modal-state');
       const pinnedEl = document.getElementById('modal-pinned');
 
-      if (type === 'bundle') {
-        if (statsEl) statsEl.style.display = 'none';
-        if (datesEl) datesEl.style.display = 'none';
-        if (stateEl) stateEl.style.display = 'none';
-        if (pinnedEl) pinnedEl.style.display = 'none';
+      if (statsEl) statsEl.style.display = 'flex';
+      if (datesEl) datesEl.style.display = 'flex';
+      if (stateEl) stateEl.style.display = 'block';
 
-        if (bundleDetails) {
-          bundleDetails.style.display = 'flex';
-          if (bundleSkills) {
-            bundleSkills.innerHTML = (skillObj.skills || []).map(s =>
-              '<span style="background:#161b22;border:1px solid #30363d;border-radius:4px;padding:4px 8px;font-size:12px;color:#c9d1d9;display:inline-flex;align-items:center;gap:6px;">' +
-              '<i class="fa-solid fa-puzzle-piece" style="color:#2ea043;font-size:10px;"></i>' + esc(s) +
-              '</span>'
-            ).join('');
-          }
-          if (bundleInstructionContainer && bundleInstruction) {
-            if (skillObj.instruction) {
-              bundleInstruction.textContent = skillObj.instruction;
-              bundleInstructionContainer.style.display = 'block';
-            } else {
-              bundleInstruction.textContent = '';
-              bundleInstructionContainer.style.display = 'none';
-            }
-          }
-        }
+      document.getElementById('modal-use-count').textContent = skillObj.use_count || 0;
+      document.getElementById('modal-view-count').textContent = skillObj.view_count || 0;
+      document.getElementById('modal-patch-count').textContent = skillObj.patch_count || 0;
+
+      const state = skillObj.state || 'active';
+      stateEl.className = 'skill-modal-state ' + (state === 'active' ? 'active' : 'inactive');
+      stateEl.innerHTML = '<i class="fa-solid fa-circle"></i> ' + esc(state.charAt(0).toUpperCase() + state.slice(1));
+
+      setModalDate('modal-created-at', skillObj.created_at);
+      setModalDate('modal-last-used-at', skillObj.last_used_at);
+      setModalDate('modal-last-viewed-at', skillObj.last_viewed_at);
+      setModalDate('modal-last-patched-at', skillObj.last_patched_at);
+
+      if (skillObj.pinned) {
+        pinnedEl.style.display = 'inline-flex';
       } else {
-        if (statsEl) statsEl.style.display = 'flex';
-        if (datesEl) datesEl.style.display = 'flex';
-        if (stateEl) stateEl.style.display = 'block';
-        if (bundleDetails) bundleDetails.style.display = 'none';
-
-        document.getElementById('modal-use-count').textContent = skillObj.use_count || 0;
-        document.getElementById('modal-view-count').textContent = skillObj.view_count || 0;
-        document.getElementById('modal-patch-count').textContent = skillObj.patch_count || 0;
-
-        const state = skillObj.state || 'active';
-        stateEl.className = 'skill-modal-state ' + (state === 'active' ? 'active' : 'inactive');
-        stateEl.innerHTML = '<i class="fa-solid fa-circle"></i> ' + esc(state.charAt(0).toUpperCase() + state.slice(1));
-
-        setModalDate('modal-created-at', skillObj.created_at);
-        setModalDate('modal-last-used-at', skillObj.last_used_at);
-        setModalDate('modal-last-viewed-at', skillObj.last_viewed_at);
-        setModalDate('modal-last-patched-at', skillObj.last_patched_at);
-
-        if (skillObj.pinned) {
-          pinnedEl.style.display = 'inline-flex';
-        } else {
-          pinnedEl.style.display = 'none';
-        }
+        pinnedEl.style.display = 'none';
       }
 
       document.getElementById('modal-name').textContent = skillObj.name || '';
-      document.getElementById('modal-category').textContent = type === 'bundle' ? 'Skill Bundle' : (skillObj.category || '(senza categoria)');
+      document.getElementById('modal-category').textContent = skillObj.category || '(senza categoria)';
 
       const descEl = document.getElementById('modal-description');
       const desc = skillObj.description || '';
@@ -98,11 +65,9 @@
         profileSpan.textContent = 'Skill operator — default e coder';
       } else if (type === 'shared') {
         profileSpan.textContent = 'Skill condivisa — presente in tutti i profili';
-      } else if (type === 'bundle') {
-        profileSpan.textContent = 'Disponibile globalmente — carica le skill abilitate nel profilo corrente';
       }
       // Fonte delle scaricate: author + link verificato (solo se presenti in API)
-      if (type !== 'bundle' && skillObj.source && skillObj.source.author) {
+      if (skillObj.source && skillObj.source.author) {
         const srcUrl = skillObj.source.url && skillObj.source.url.startsWith('https://')
           ? skillObj.source.url : null;
         profileSpan.innerHTML = esc(profileSpan.textContent) + ' · Fonte: ' +

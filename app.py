@@ -1114,36 +1114,6 @@ def index():
     return app.send_static_file('index.html')
 
 
-@app.route('/api/skill-bundles')
-def api_skill_bundles():
-    """GET /api/skill-bundles — Legge i bundle presenti in ~/.hermes/skill-bundles/*.yaml."""
-    bundles_dir = Path.home() / '.hermes' / 'skill-bundles'
-    bundles = []
-    if bundles_dir.is_dir():
-        for f in sorted(bundles_dir.glob('*.yaml')) + sorted(bundles_dir.glob('*.yml')):
-            try:
-                with open(f, encoding='utf-8') as fh:
-                    data = yaml.safe_load(fh)
-                if isinstance(data, dict):
-                    name = data.get('name') or f.stem
-                    description = data.get('description', '')
-                    skills = data.get('skills', [])
-                    instruction = data.get('instruction', '')
-
-                    if not isinstance(skills, list):
-                        skills = [skills] if skills else []
-
-                    bundles.append({
-                        'name': str(name).strip(),
-                        'description': str(description).strip(),
-                        'skills': [str(s).strip() for s in skills if s],
-                        'instruction': str(instruction).strip(),
-                        'path': str(f)
-                    })
-            except Exception:
-                pass
-    return _etag_response(bundles)
-
 
 @app.route('/api/kanban/archive/<task_id>', methods=['POST'])
 def api_kanban_archive(task_id):

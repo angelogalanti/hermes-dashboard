@@ -1,4 +1,4 @@
-    // ── skills.js — profili, skill locali/condivise/primarie, bundle ──
+    // ── skills.js — profili, skill locali/condivise/primarie ──
     import { esc, sortProfiles, timeAgo } from './utils.js';
     import { confirmDialog, alertDialog } from './modals.js';
 
@@ -530,58 +530,6 @@
       contentEl.appendChild(grid);
     }
 
-    // ── Render Skill Bundles ─────────────────────────────────────
-    export function renderSkillBundles(contentEl, bundles, onOpenSkill) {
-      const section = contentEl.closest('section');
-      if (!bundles || !bundles.length) {
-        if (section) section.style.display = 'none';
-        return;
-      }
-      if (section) section.style.display = '';
-
-      const grid = document.createElement('div');
-      grid.className = 'skill-grid';
-
-      bundles.forEach(b => {
-        const skillCount = b.skills ? b.skills.length : 0;
-        const skillsSnippet = b.skills ? b.skills.map(s =>
-          '<span style="background:#1f242c;border:1px solid #30363d;border-radius:4px;padding:2px 6px;font-size:11px;color:#8b949e;display:inline-flex;align-items:center;gap:4px;">' +
-          '<i class="fa-solid fa-puzzle-piece" style="color:#2ea043;font-size:9px;"></i>' + esc(s) +
-          '</span>'
-        ).join(' ') : '';
-
-        const card = document.createElement('div');
-        card.className = 'skill-bundle-card';
-        card.innerHTML =
-          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
-            '<div style="display:flex;align-items:center;gap:8px;">' +
-              '<i class="fa-solid fa-layer-group" style="color:#00cbd6;font-size:13px;"></i>' +
-              '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + esc(b.name) + '</span>' +
-            '</div>' +
-            '<span style="background:#1f2937;color:#c9d1d9;font-size:11px;padding:2px 6px;border-radius:12px;font-weight:500;">' +
-              skillCount + ' skill' +
-            '</span>' +
-          '</div>' +
-          '<div style="font-size:12px;color:#8b949e;line-height:1.4;min-height:18px;">' + esc(b.description) + '</div>' +
-          '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">' +
-            skillsSnippet +
-          '</div>';
-
-        card.addEventListener('click', () => onOpenSkill(b, null, 'bundle'));
-        card.setAttribute('role', 'button');
-        card.setAttribute('tabindex', '0');
-        card.addEventListener('keydown', e => {
-          if ((e.key === 'Enter' || e.key === ' ') && e.target === card) {
-            e.preventDefault();
-            onOpenSkill(b, null, 'bundle');
-          }
-        });
-        grid.appendChild(card);
-      });
-
-      contentEl.innerHTML = '';
-      contentEl.appendChild(grid);
-    }
 
     // ── Delegation click per profili e skill ─────────────────────
     // (i modal delle card sono legati con addEventListener in fase di

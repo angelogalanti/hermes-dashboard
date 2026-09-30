@@ -62,7 +62,7 @@
       <h2><i class="fa-solid fa-table"></i> Chi legge cosa</h2>
       <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
         <i class="fa-solid fa-table" style="color:#d2a8ff;"></i>
-        Ogni profilo legge le sue <strong>locali</strong> più i bundle del suo tipo.
+        Ogni profilo legge le sue <strong>locali</strong> più le cartelle del suo tipo.
         Frontline (<strong>default</strong>, <strong>ceo</strong>, <strong>teacher</strong>) parlano con te;
         worker (<strong>coder</strong>, <strong>researcher</strong>) solo via kanban.
         Gli orchestratori (<strong>default</strong>, <strong>ceo</strong>) leggono anche le locali dei worker,
@@ -101,16 +101,6 @@
       </div>
     </section>
 
-    <!-- Sezione Skill Bundles -->
-    <section id="skill-bundles-section">
-      <h2><i class="fa-solid fa-layer-group"></i> Skill Bundles</h2>
-      <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
-        <i class="fa-solid fa-link" style="color:#2ea043;"></i>
-        Raggruppamenti di skill sotto un unico slash command. Disponibili su tutti i profili,
-        caricano solo le skill presenti nel profilo corrente.
-      </p>
-      <div id="skill-bundles-content"></div>
-    </section>
 
     <!-- Sezione Skill Condivise (elenco) -->
     <section id="skill-shared-section">
@@ -206,17 +196,6 @@
         <div class="skill-modal-date">
           <span>Ultima modifica</span>
           <span id="modal-last-patched-at"></span>
-        </div>
-      </div>
-      <!-- Info aggiuntive per Skill Bundles -->
-      <div id="modal-bundle-details" style="display:none; flex-direction:column; gap:12px; margin-top:12px; border-top:1px solid #21262d; padding-top:12px;">
-        <div>
-          <h4 style="margin:0 0 6px; font-size:12px; color:#8b949e; text-transform:uppercase;"><i class="fa-solid fa-puzzle-piece"></i> Skill incluse</h4>
-          <div id="modal-bundle-skills" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
-        </div>
-        <div id="modal-bundle-instruction-container" style="display:none;">
-          <h4 style="margin:0 0 6px; font-size:12px; color:#8b949e; text-transform:uppercase;"><i class="fa-solid fa-align-left"></i> Istruzioni (prompt)</h4>
-          <pre id="modal-bundle-instruction" style="background:#161b22; border:1px solid #21262d; border-radius:6px; padding:10px; font-size:12px; color:#c9d1d9; white-space:pre-wrap; font-family:monospace; margin:0; line-height:1.4; max-height:150px; overflow-y:auto;"></pre>
         </div>
       </div>
       <div class="skill-modal-meta" id="modal-meta">
