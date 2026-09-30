@@ -1,6 +1,7 @@
     // ── modals.js — skill / SOUL-AGENTS / heartbeat ────────────────
     import { esc, shortId, timeAgo } from './utils.js';
     import { fetchJSON } from './api.js';
+    import { getSkillActivity } from './skills.js';
 
     // ── Skill Modal ──────────────────────────────────────────────
     export function openSkillModal(skillObj, profileName, type) {
@@ -16,17 +17,39 @@
       const stateEl = document.getElementById('modal-state');
       const pinnedEl = document.getElementById('modal-pinned');
 
-      if (statsEl) statsEl.style.display = 'flex';
+      if (statsEl) statsEl.style.display = 'grid';
       if (datesEl) datesEl.style.display = 'flex';
-      if (stateEl) stateEl.style.display = 'block';
+      if (stateEl) stateEl.style.display = 'inline-flex';
 
       document.getElementById('modal-use-count').textContent = skillObj.use_count || 0;
       document.getElementById('modal-view-count').textContent = skillObj.view_count || 0;
       document.getElementById('modal-patch-count').textContent = skillObj.patch_count || 0;
 
+      const act = getSkillActivity(skillObj);
       const state = skillObj.state || 'active';
       stateEl.className = 'skill-modal-state ' + (state === 'active' ? 'active' : 'inactive');
       stateEl.innerHTML = '<i class="fa-solid fa-circle"></i> ' + esc(state.charAt(0).toUpperCase() + state.slice(1));
+
+      let actEl = document.getElementById('modal-act-tag');
+      if (!actEl) {
+        actEl = document.createElement('div');
+        actEl.id = 'modal-act-tag';
+        actEl.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:12px;margin-bottom:18px;margin-left:8px;';
+        stateEl.parentNode.insertBefore(actEl, stateEl.nextSibling);
+      }
+      if (act && act.state !== 'unused') {
+        actEl.style.display = 'inline-flex';
+        actEl.style.background = 'rgba(255,255,255,0.06)';
+        actEl.style.border = '1px solid ' + act.color + '44';
+        actEl.style.color = act.color;
+        actEl.innerHTML = esc(act.label) + (act.badge ? ' &middot; ' + esc(act.badge) : '') + ' &middot; <span style="color:#8b949e;">calore: ' + act.score + '/100</span>';
+      } else {
+        actEl.style.display = 'inline-flex';
+        actEl.style.background = 'rgba(255,255,255,0.04)';
+        actEl.style.border = '1px solid #30363d';
+        actEl.style.color = '#8b949e';
+        actEl.textContent = 'Mai usata';
+      }
 
       setModalDate('modal-created-at', skillObj.created_at);
       setModalDate('modal-last-used-at', skillObj.last_used_at);

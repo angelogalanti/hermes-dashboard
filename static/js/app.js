@@ -19,6 +19,7 @@
       renderSkillMap,
       setLocalFilterHold, restoreLocalDetails,
       initSkills,
+      updateSkillsActivityContext, getSkillSortMode, setSkillSortMode,
     } from './skills.js';
     import {
       renderCredits, renderUsageCompact,
@@ -44,10 +45,25 @@
     const skillWorkerContent = document.getElementById('skill-worker-content');
     const skillOperatorContent = document.getElementById('skill-operator-content');
     const skillPrimaryContent = document.getElementById('skill-primary-content');
+    const skillSortSelect = document.getElementById('skill-sort-select');
     const creditsBadge = document.getElementById('credits-badge');
     const usageBadge = document.getElementById('usage-badge');
     const gatewayPill = document.getElementById('gateway-pill');
     const healthPill = document.getElementById('health-pill');
+
+    // Ultimo snapshot dei profili per re-render immediato su cambio ordinamento
+    let _latestProfiles = [];
+
+    function renderAllSkillSections(profiles) {
+      updateSkillsActivityContext(profiles);
+      renderSkillListByProfile(skillLocalContent, profiles, openSkillModal);
+      renderSkillMatrixShared(skillSharedContent, profiles, openSkillModal);
+      renderSkillMatrixFrontline(skillFrontlineContent, profiles, openSkillModal);
+      renderSkillMatrixWorker(skillWorkerContent, profiles, openSkillModal);
+      renderSkillMatrixOperator(skillOperatorContent, profiles, openSkillModal);
+      renderSkillPrimary(skillPrimaryContent, profiles, openSkillModal);
+      renderSkillMap(profiles);
+    }
 
     // Primo caricamento riuscito per sezione (errori → box solo se mai visti dati)
     const hasData = { fast: false, credits: false, usage: false };
@@ -67,16 +83,11 @@
           touchLastUpdate();
           return;
         }
-        renderKanbanBoard(kanbanBoard, data.kanban || [], data.profiles || []);
-        renderProfiles(profilesBody, data.profiles || []);
-        renderGatewayPill(gatewayPill, data.profiles || []);
-        renderSkillListByProfile(skillLocalContent, data.profiles || [], openSkillModal);
-        renderSkillMatrixShared(skillSharedContent, data.profiles || [], openSkillModal);
-        renderSkillMatrixFrontline(skillFrontlineContent, data.profiles || [], openSkillModal);
-        renderSkillMatrixWorker(skillWorkerContent, data.profiles || [], openSkillModal);
-        renderSkillMatrixOperator(skillOperatorContent, data.profiles || [], openSkillModal);
-        renderSkillPrimary(skillPrimaryContent, data.profiles || [], openSkillModal);
-        renderSkillMap(data.profiles || []);
+        _latestProfiles = data.profiles || [];
+        renderKanbanBoard(kanbanBoard, data.kanban || [], _latestProfiles);
+        renderProfiles(profilesBody, _latestProfiles);
+        renderGatewayPill(gatewayPill, _latestProfiles);
+        renderAllSkillSections(_latestProfiles);
         hasData.fast = true;
         touchLastUpdate();
         const fi = document.getElementById('filter-input');
@@ -166,6 +177,19 @@
       onOpenSoul: (name) => openSoulModal(name),
       onOpenAgents: (name) => openAgentsModal(name),
     });
+
+    // ── Ordinamento skill ─────────────────────────────────────────
+    if (skillSortSelect) {
+      skillSortSelect.value = getSkillSortMode();
+      skillSortSelect.addEventListener('change', () => {
+        setSkillSortMode(skillSortSelect.value);
+        if (_latestProfiles.length > 0) {
+          renderAllSkillSections(_latestProfiles);
+          const fi = document.getElementById('filter-input');
+          if (fi && fi.value) fi.dispatchEvent(new Event('input'));
+        }
+      });
+    }
 
     // ── Filtro ricerca (skill + task + profili, nativo; Esc di type=search svuota da solo) ──
     const filterInput = document.getElementById('filter-input');

@@ -361,6 +361,7 @@
     .skill-card {
       background: #0d1117;
       border: 1px solid #30363d;
+      border-left-width: 4px;
       border-radius: 6px;
       padding: 10px 14px;
       display: flex;
@@ -373,6 +374,36 @@
     .skill-card:hover {
       border-color: #58a6ff;
       box-shadow: 0 0 0 1px rgba(88,166,255,0.3);
+    }
+    .skill-card.state-new-active {
+      border-left-color: #00cbd6;
+    }
+    .skill-card.state-active-hot {
+      border-left-color: #3fb950;
+    }
+    .skill-card.state-active-warm {
+      border-left-color: #56d364;
+    }
+    .skill-card.state-cooling {
+      border-left-color: #d29922;
+    }
+    .skill-card.state-stale {
+      border-left-color: #f85149;
+    }
+    .skill-card.state-unused {
+      border-left-color: #30363d;
+    }
+    .skill-act-badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid currentColor;
+      white-space: nowrap;
+      flex: none;
+      letter-spacing: 0.01em;
+      line-height: 1.2;
     }
     .skill-card-delete {
       position: absolute;
@@ -1211,3 +1242,18 @@
     }
     .filter-input:focus-visible { outline: none; border-color: #58a6ff; }
     .filter-input::placeholder { color: #484f58; }
+
+    .sort-select {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .sort-select:hover, .sort-select:focus-visible {
+      border-color: #58a6ff;
+    }

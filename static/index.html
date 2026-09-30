@@ -17,6 +17,11 @@
     <div class="controls">
       <div class="controls-actions">
         <input id="filter-input" class="filter-input" type="search" name="filter" placeholder="Filtra skill / task…  ( / )" autocomplete="off" aria-label="Filtra skill e task">
+        <select id="skill-sort-select" class="sort-select" title="Ordinamento skill" aria-label="Ordinamento skill">
+          <option value="activity">⚡ Attività recente</option>
+          <option value="uses">⭐ Più usate in totale</option>
+          <option value="stale">💤 Meno recenti (in disuso)</option>
+        </select>
         <span id="filter-count" class="filter-count" aria-live="polite"></span>
         <button id="refresh-btn" class="icon-btn" title="Forza aggiornamento (ignora cache)" aria-label="Forza aggiornamento">
           <i class="fas fa-sync-alt" aria-hidden="true"></i>
@@ -107,7 +112,10 @@
       <h2><i class="fa-solid fa-share-nodes"></i> Skill Condivise</h2>
       <p style="font-size:13px;color:#8b949e;margin-bottom:16px;">
         Skill condivise (skills-shared) &mdash; comuni a tutti i profili. <span style="color:#484f58;">Le stesse skill sono disponibili per ogni profilo.</span><br>
-        <span style="font-size:12px;"><span style="color:#3fb950;">&#9679;</span> nativa Hermes &nbsp;<span style="color:#d29922;">&#9679;</span> scaricata &nbsp;<span style="color:#58a6ff;">&#9679;</span> creata da noi</span>
+        <span style="font-size:12px;display:inline-flex;flex-wrap:wrap;gap:14px;margin-top:6px;">
+          <span><strong>Provenienza:</strong> <span style="color:#3fb950;">&#9679;</span> nativa &nbsp;<span style="color:#d29922;">&#9679;</span> scaricata &nbsp;<span style="color:#58a6ff;">&#9679;</span> creata da noi</span>
+          <span><strong>Stato:</strong> <span style="color:#00cbd6;">&#9646;</span> nuova attiva &nbsp;<span style="color:#3fb950;">&#9646;</span> attiva &nbsp;<span style="color:#d29922;">&#9646;</span> in calo &nbsp;<span style="color:#f85149;">&#9646;</span> in disuso</span>
+        </span>
       </p>
       <div id="skill-shared-content"></div>
     </section>

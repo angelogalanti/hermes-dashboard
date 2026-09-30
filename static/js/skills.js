@@ -186,11 +186,195 @@
     // Visibilità dei bucket condivisi (per il confirm di cancellazione)
     const VISIBILITY = { shared: 'TUTTI i profili', frontline: 'default, ceo e teacher', worker: 'coder e researcher', operator: 'default e coder', primary: 'default e ceo' };
 
-    // Pinned prima, poi più usate
+    // ── Calcolo dinamico dello stato delle skill (100% data-driven, zero magic numbers) ──
+    function calculateQuantiles(numbers) {
+      if (!numbers || !numbers.length) return { q1: 1, med: 2, q3: 7 };
+      const sorted = [...numbers].sort((a, b) => a - b);
+      const q = (p) => {
+        const pos = (sorted.length - 1) * p;
+        const base = Math.floor(pos);
+        const rest = pos - base;
+        return sorted[base + 1] !== undefined ? sorted[base] + rest * (sorted[base + 1] - sorted[base]) : sorted[base];
+      };
+      return { q1: q(0.25), med: q(0.50), q3: q(0.75) };
+    }
+
+    let _activityContext = null;
+    let _currentSortMode = localStorage.getItem('hermes_skill_sort') || 'activity';
+
+    export function getSkillSortMode() {
+      return _currentSortMode;
+    }
+
+    export function setSkillSortMode(mode) {
+      _currentSortMode = mode;
+      localStorage.setItem('hermes_skill_sort', mode);
+    }
+
+    export function updateSkillsActivityContext(profiles) {
+      const now = Date.now();
+      const allUsed = [];
+      const seen = new Set();
+
+      (profiles || []).forEach(p => {
+        const psk = p.skills || {};
+        ['local', 'shared', 'frontline', 'worker', 'operator', 'primary'].forEach(secKey => {
+          const sec = psk[secKey];
+          if (sec && Array.isArray(sec.list)) {
+            sec.list.forEach(sk => {
+              if (!sk || !sk.name || seen.has(sk.name)) return;
+              seen.add(sk.name);
+              if (sk.use_count > 0 && sk.last_used_at) {
+                const usedMs = new Date(sk.last_used_at).getTime();
+                const createdMs = sk.created_at ? new Date(sk.created_at).getTime() : usedMs;
+                const daysAgo = Math.max(0.01, (now - usedMs) / 86400000);
+                const lifetimeDays = Math.max(0.5, (now - createdMs) / 86400000);
+                const velocity = sk.use_count / lifetimeDays;
+                allUsed.push({ name: sk.name, daysAgo, lifetimeDays, velocity, use_count: sk.use_count });
+              }
+            });
+          }
+        });
+      });
+
+      if (!allUsed.length) {
+        _activityContext = null;
+        return;
+      }
+
+      const recencyQuantiles = calculateQuantiles(allUsed.map(s => s.daysAgo));
+      const ageQuantiles = calculateQuantiles(allUsed.map(s => s.lifetimeDays));
+      const velocityQuantiles = calculateQuantiles(allUsed.map(s => s.velocity));
+
+      _activityContext = {
+        now,
+        recencyQuantiles,
+        ageQuantiles,
+        velocityQuantiles,
+      };
+    }
+
+    export function getSkillActivity(sk) {
+      if (!sk || sk.use_count === 0 || !sk.last_used_at) {
+        return {
+          state: 'unused',
+          label: 'Mai usata',
+          color: '#484f58',
+          badge: '',
+          score: 0,
+          daysAgo: 9999,
+          velocity: 0,
+        };
+      }
+
+      const now = _activityContext ? _activityContext.now : Date.now();
+      const usedMs = new Date(sk.last_used_at).getTime();
+      const createdMs = sk.created_at ? new Date(sk.created_at).getTime() : usedMs;
+      const daysAgo = Math.max(0.01, (now - usedMs) / 86400000);
+      const lifetimeDays = Math.max(0.5, (now - createdMs) / 86400000);
+      const velocity = sk.use_count / lifetimeDays;
+
+      let velText = '';
+      if (velocity >= 1) {
+        velText = `${velocity.toFixed(1)}/gg`;
+      } else if (velocity * 7 >= 1) {
+        velText = `${(velocity * 7).toFixed(1)}/sett`;
+      }
+
+      const rq = (_activityContext && _activityContext.recencyQuantiles) || { q1: 1, med: 2, q3: 8 };
+      const aq = (_activityContext && _activityContext.ageQuantiles) || { q1: 4, med: 10, q3: 70 };
+
+      // Punteggio di calore continuo (0 - 100) basato su recency e frequenza relative
+      const recencyFactor = 1 / (1 + daysAgo / Math.max(0.1, rq.med));
+      const velocityFactor = Math.min(1, velocity / 2);
+      const score = Math.round((recencyFactor * 0.7 + velocityFactor * 0.3) * 100);
+
+      // Una skill è considerata "nuova/giovane" se la sua età rientra nel quartile Q1 o entro 7 giorni
+      const isNew = lifetimeDays <= Math.max(aq.q1, 7);
+      const isRecentlyUsed = daysAgo <= rq.med;
+
+      if (isNew && isRecentlyUsed) {
+        return {
+          state: 'new-active',
+          label: 'Nuova & attiva',
+          color: '#00cbd6',
+          badge: `✨ Nuova · ${velText || 'attiva'}`,
+          score,
+          daysAgo,
+          velocity,
+        };
+      }
+
+      if (daysAgo <= rq.q1) {
+        return {
+          state: 'active-hot',
+          label: 'Molto attiva',
+          color: '#3fb950',
+          badge: `🔥 Attiva · ${velText || 'frequente'}`,
+          score,
+          daysAgo,
+          velocity,
+        };
+      }
+
+      if (daysAgo <= rq.med) {
+        return {
+          state: 'active-warm',
+          label: 'Attiva',
+          color: '#56d364',
+          badge: `Attiva · ${velText || 'recente'}`,
+          score,
+          daysAgo,
+          velocity,
+        };
+      }
+
+      if (daysAgo <= rq.q3) {
+        return {
+          state: 'cooling',
+          label: 'In calo',
+          color: '#d29922',
+          badge: `🟡 Ferma da ${Math.round(daysAgo)}gg`,
+          score,
+          daysAgo,
+          velocity,
+        };
+      }
+
+      const wasUsedALot = sk.use_count >= 10;
+      return {
+        state: 'stale',
+        label: wasUsedALot ? 'Ex-usata in disuso' : 'In disuso',
+        color: '#f85149',
+        badge: wasUsedALot ? `⚠️ Ex-usata · ferma da ${Math.round(daysAgo)}gg` : `⚠️ In disuso (${Math.round(daysAgo)}gg fa)`,
+        score,
+        daysAgo,
+        velocity,
+      };
+    }
+
+    // Ordinamento dinamico: per attività/freschezza, totale storico, o in disuso
     function sortSkills(list) {
-      return [...list].sort((a, b) =>
-        ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) || (b.use_count - a.use_count)
-      );
+      return [...list].sort((a, b) => {
+        const pinDiff = (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+        if (pinDiff !== 0) return pinDiff;
+
+        if (_currentSortMode === 'activity') {
+          const actA = getSkillActivity(a);
+          const actB = getSkillActivity(b);
+          return (actB.score - actA.score) || (b.use_count - a.use_count);
+        } else if (_currentSortMode === 'stale') {
+          const usedA = a.use_count > 0 ? 1 : 0;
+          const usedB = b.use_count > 0 ? 1 : 0;
+          if (usedA !== usedB) return usedB - usedA;
+          const actA = getSkillActivity(a);
+          const actB = getSkillActivity(b);
+          return (actB.daysAgo - actA.daysAgo) || (b.use_count - a.use_count);
+        } else {
+          // 'uses' (totale storico)
+          return (b.use_count - a.use_count) || a.name.localeCompare(b.name);
+        }
+      });
     }
 
     // ── Card skill (mai usate opacizzate, pinned con iconcina) ──
@@ -198,9 +382,10 @@
     const PROV_COLOR = { native: '#3fb950', external: '#d29922', ours: '#58a6ff' };
     const PROV_LABEL = { native: 'nativa Hermes', external: 'scaricata', ours: 'creata da noi' };
     function buildSkillCard(sk, { icon, iconColor, metaHtml, delAttrs, onOpen }) {
+      const act = getSkillActivity(sk);
       const card = document.createElement('div');
-      card.className = 'skill-card' + (sk.use_count > 0 ? '' : ' unused');
-      card.title = sk.use_count > 0 ? '' : 'Mai usata';
+      card.className = 'skill-card state-' + act.state + (sk.use_count > 0 ? '' : ' unused');
+      card.title = sk.use_count > 0 ? 'Stato: ' + act.label + ' (score calore: ' + act.score + '/100)' : 'Mai usata';
       const useLabel = sk.use_count > 0 ? 'usata ' + sk.use_count + ' volte' : 'mai usata';
       const ago = sk.last_used_at ? timeAgo(sk.last_used_at) : '';
       const prov = sk.provenance || 'ours'; // payload vecchi senza campo
@@ -216,20 +401,28 @@
       const pinHtml = sk.pinned
         ? '<i class="fa-solid fa-thumbtack" style="color:#d29922;font-size:11px;" title="Pinned"></i> '
         : '';
+
+      const actBadgeHtml = (act.state !== 'unused' && act.badge)
+        ? '<span class="skill-act-badge" style="color:' + act.color + ';">' + esc(act.badge) + '</span>'
+        : '';
+
       card.innerHTML =
         '<button class="skill-card-delete" title="Cancella skill" ' + delAttrs + '>' +
         '<i class="fa-solid fa-trash-can"></i>' +
         '</button>' +
-        '<div style="display:flex;align-items:center;gap:8px;">' +
-        provDot +
-        '<i class="' + icon + '" style="color:' + iconColor + ';font-size:13px;"></i>' +
-        '<span style="font-weight:600;color:#f0f6fc;font-size:14px;">' + pinHtml + esc(sk.name) + '</span>' +
-        (metaHtml || '') +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding-right:24px;">' +
+        '  <div style="display:flex;align-items:center;gap:8px;min-width:0;">' +
+        '    ' + provDot +
+        '    <i class="' + icon + '" style="color:' + iconColor + ';font-size:13px;flex:none;"></i>' +
+        '    <span style="font-weight:600;color:#f0f6fc;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + pinHtml + esc(sk.name) + '</span>' +
+        '    ' + (metaHtml || '') +
+        '  </div>' +
+        '  ' + actBadgeHtml +
         '</div>' +
-        '<div style="display:flex;gap:12px;font-size:12px;color:#8b949e;">' +
-        '<span><i class="fa-regular fa-star"></i> ' + esc(useLabel) + '</span>' +
-        (ago ? '<span style="color:#484f58;">' + esc(ago) + '</span>' : '') +
-        (srcHtml ? '<span>' + srcHtml + '</span>' : '') +
+        '<div style="display:flex;align-items:center;gap:12px;font-size:12px;color:#8b949e;margin-top:2px;">' +
+        '  <span><i class="fa-regular fa-star"></i> ' + esc(useLabel) + '</span>' +
+        '  ' + (ago ? '<span style="color:#6e7681;">' + esc(ago) + '</span>' : '') +
+        '  ' + (srcHtml ? '<span>' + srcHtml + '</span>' : '') +
         '</div>';
       if (onOpen) card.addEventListener('click', e => {
         if (e.target.closest('[data-del]') || e.target.closest('a')) return; // cestino e link fonte: non aprire il modal
@@ -408,11 +601,10 @@
       }
       if (section) section.style.display = '';
 
-      const bucketList = sortSkills(profilesWithBucket[0].skills[bucket].list);
-
+      const baseList = profilesWithBucket[0].skills[bucket].list.map(sk => Object.assign({}, sk));
       const profileCounts = {};
-      bucketList.forEach(sk => {
-        profileCounts[sk.name] = { count: 0, profiles: [] };
+      baseList.forEach(sk => {
+        profileCounts[sk.name] = { count: 0, profiles: [], maxUse: sk.use_count || 0, lastUsed: sk.last_used_at };
       });
 
       profilesWithBucket.forEach(p => {
@@ -429,18 +621,21 @@
         });
       });
 
-      // (già ordinata con sortSkills: pinned prima, poi use_count)
+      baseList.forEach(sk => {
+        const pc = profileCounts[sk.name];
+        if (pc) {
+          sk.use_count = pc.maxUse;
+          sk.last_used_at = pc.lastUsed;
+        }
+      });
+
+      const bucketList = sortSkills(baseList);
 
       const grid = document.createElement('div');
       grid.className = 'skill-grid';
 
       bucketList.forEach(sk => {
         const pc = profileCounts[sk.name] || { count: 0, profiles: [] };
-        // uso reale = max tra profili (la lista base è del primo profilo solo)
-        sk = Object.assign({}, sk, {
-          use_count: pc.maxUse || sk.use_count || 0,
-          last_used_at: pc.lastUsed || sk.last_used_at,
-        });
         const countLabel = pc.count + '/' + profilesWithBucket.length + ' profili';
         const card = buildSkillCard(sk, {
           icon: 'fa-solid fa-puzzle-piece',
@@ -484,22 +679,20 @@
     }
 
     // ── Render Skill Primarie (card) ─────────────────────────────
+    // ── Render Skill Primarie (card) ─────────────────────────────
     export function renderSkillPrimary(contentEl, profiles, onOpenSkill) {
       const section = contentEl.closest('section');
       const defaultProfile = profiles.find(p => p.name === 'default');
 
-      const primaryList = (defaultProfile && defaultProfile.skills && defaultProfile.skills.primary && defaultProfile.skills.primary.list)
-        ? sortSkills(defaultProfile.skills.primary.list)
+      const rawList = (defaultProfile && defaultProfile.skills && defaultProfile.skills.primary && defaultProfile.skills.primary.list)
+        ? defaultProfile.skills.primary.list.map(sk => Object.assign({}, sk))
         : [];
 
-      if (!primaryList.length) {
+      if (!rawList.length) {
         if (section) section.style.display = 'none';
         return;
       }
       if (section) section.style.display = '';
-
-      const grid = document.createElement('div');
-      grid.className = 'skill-grid';
 
       // uso reale = max tra profili (la lista base è del default solo)
       const maxUse = {};
@@ -512,11 +705,17 @@
         });
       });
 
+      rawList.forEach(sk => {
+        sk.use_count = maxUse[sk.name] || sk.use_count || 0;
+        sk.last_used_at = maxUse[sk.name + '|last'] || sk.last_used_at;
+      });
+
+      const primaryList = sortSkills(rawList);
+
+      const grid = document.createElement('div');
+      grid.className = 'skill-grid';
+
       primaryList.forEach(sk => {
-        sk = Object.assign({}, sk, {
-          use_count: maxUse[sk.name] || sk.use_count || 0,
-          last_used_at: maxUse[sk.name + '|last'] || sk.last_used_at,
-        });
         grid.appendChild(buildSkillCard(sk, {
           icon: 'fa-solid fa-crown',
           iconColor: '#d29922',
