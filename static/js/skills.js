@@ -276,7 +276,7 @@
 
       let velText = '';
       if (velocity >= 1) {
-        velText = `${velocity.toFixed(1)}/gg`;
+        velText = `${velocity >= 10 ? Math.round(velocity) : velocity.toFixed(1)}/gg`;
       } else if (velocity * 7 >= 1) {
         velText = `${(velocity * 7).toFixed(1)}/sett`;
       }
@@ -298,7 +298,7 @@
           state: 'new-active',
           label: 'Nuova & attiva',
           color: '#00cbd6',
-          badge: `✨ Nuova · ${velText || 'attiva'}`,
+          badge: velText ? `✨ nuova · ${velText}` : '✨ nuova',
           score,
           daysAgo,
           velocity,
@@ -310,7 +310,7 @@
           state: 'active-hot',
           label: 'Molto attiva',
           color: '#3fb950',
-          badge: `🔥 Attiva · ${velText || 'frequente'}`,
+          badge: velText ? `🔥 ${velText}` : '🔥 frequente',
           score,
           daysAgo,
           velocity,
@@ -322,7 +322,7 @@
           state: 'active-warm',
           label: 'Attiva',
           color: '#56d364',
-          badge: `Attiva · ${velText || 'recente'}`,
+          badge: '', // Molto discreta: le skill attive standard non hanno badge rumoroso
           score,
           daysAgo,
           velocity,
@@ -334,7 +334,7 @@
           state: 'cooling',
           label: 'In calo',
           color: '#d29922',
-          badge: `🟡 Ferma da ${Math.round(daysAgo)}gg`,
+          badge: 'in calo',
           score,
           daysAgo,
           velocity,
@@ -346,7 +346,7 @@
         state: 'stale',
         label: wasUsedALot ? 'Ex-usata in disuso' : 'In disuso',
         color: '#f85149',
-        badge: wasUsedALot ? `⚠️ Ex-usata · ferma da ${Math.round(daysAgo)}gg` : `⚠️ In disuso (${Math.round(daysAgo)}gg fa)`,
+        badge: wasUsedALot ? '⚠️ ex-usata' : 'in disuso',
         score,
         daysAgo,
         velocity,
@@ -403,26 +403,24 @@
         : '';
 
       const actBadgeHtml = (act.state !== 'unused' && act.badge)
-        ? '<span class="skill-act-badge" style="color:' + act.color + ';">' + esc(act.badge) + '</span>'
+        ? '<span class="skill-act-badge state-' + act.state + '">' + esc(act.badge) + '</span>'
         : '';
 
       card.innerHTML =
         '<button class="skill-card-delete" title="Cancella skill" ' + delAttrs + '>' +
         '<i class="fa-solid fa-trash-can"></i>' +
         '</button>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding-right:24px;">' +
-        '  <div style="display:flex;align-items:center;gap:8px;min-width:0;">' +
-        '    ' + provDot +
-        '    <i class="' + icon + '" style="color:' + iconColor + ';font-size:13px;flex:none;"></i>' +
-        '    <span style="font-weight:600;color:#f0f6fc;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + pinHtml + esc(sk.name) + '</span>' +
-        '    ' + (metaHtml || '') +
-        '  </div>' +
-        '  ' + actBadgeHtml +
+        '<div class="skill-card-header">' +
+        provDot +
+        '<i class="' + icon + '" style="color:' + iconColor + ';font-size:13px;flex:none;"></i>' +
+        '<span class="skill-card-name">' + pinHtml + esc(sk.name) + '</span>' +
+        (metaHtml || '') +
         '</div>' +
-        '<div style="display:flex;align-items:center;gap:12px;font-size:12px;color:#8b949e;margin-top:2px;">' +
+        '<div class="skill-card-meta">' +
         '  <span><i class="fa-regular fa-star"></i> ' + esc(useLabel) + '</span>' +
-        '  ' + (ago ? '<span style="color:#6e7681;">' + esc(ago) + '</span>' : '') +
-        '  ' + (srcHtml ? '<span>' + srcHtml + '</span>' : '') +
+        (ago ? '<span class="skill-meta-ago">' + esc(ago) + '</span>' : '') +
+        (srcHtml ? '<span>' + srcHtml + '</span>' : '') +
+        actBadgeHtml +
         '</div>';
       if (onOpen) card.addEventListener('click', e => {
         if (e.target.closest('[data-del]') || e.target.closest('a')) return; // cestino e link fonte: non aprire il modal
