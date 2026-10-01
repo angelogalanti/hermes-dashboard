@@ -1,4 +1,4 @@
-    // ── widgets.js — credits badge, OpenCode usage ───────────────────
+    // ── widgets.js — credits badge, AI quote ───────────────────
     import { esc, fmtAge, fmtAgeShort } from './utils.js';
 
     // ── Badge "· 3m" (compatto; forma lunga nel title) ──────────────
@@ -118,60 +118,88 @@
         (data._ts ? staleBadgeHTML(data._ts) : '');
     }
 
-    // -- OpenCode Usage compatto (pill nella barra controlli) --
-    const USAGE_SHORT = { '5-hour Usage': '5h', 'Rolling Usage': 'roll', 'Weekly Usage': 'sett', 'Monthly Usage': 'mese' };
-    const WINDOW_ORDER = ['5-hour Usage', 'Rolling Usage', 'Weekly Usage', 'Monthly Usage'];
+    // -- AI quote (pannello: 5h/weekly per provider, da /api/ai-quota) --
+    // Barra = consumo; tacca = quota di tempo già trascorsa nella finestra.
+    // Barra oltre la tacca → a questo ritmo la quota finisce prima del reset.
+    const QUOTA_OK = '#3fb950', QUOTA_WARN = '#d29922', QUOTA_CRIT = '#f85149';
+    const PACE_WARN = 115; // % proiettato a fine finestra oltre cui avvisare
 
-    function usageColor(pct) {
-      if (pct >= 95) return '#f85149';
-      if (pct >= 80) return '#f0883e';
-      if (pct >= 60) return '#d29922';
-      return '#3fb950';
+    // ponytail: durata dedotta dal nome finestra; 'monthly' ≈ 30g (i mesi variano di ±1g)
+    function windowSecs(name) {
+      if (/5h/.test(name)) return 5 * 3600;
+      if (/week/.test(name)) return 7 * 86400;
+      if (/month/.test(name)) return 30 * 86400;
+      return null;
     }
 
-    export function renderUsageCompact(badge, data) {
-      if (!badge) return;
-      rememberTs(badge, data && data._ts);
-      if (!data || !data.accounts || !data.accounts.length) {
-        badge.style.display = 'none';
-        badge.innerHTML = '';
-        return;
+    function fmtDur(s) {
+      s = Math.max(0, s);
+      const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+      return d ? d + 'g ' + h + 'h' : h ? h + 'h ' + m + 'm' : m + 'm';
+    }
+
+    // { elapsed: 0..1 | null, left: secondi al reset | null, exhaustIn: secondi | null, level }
+    export function quotaPace(pct, resetsAt, name, now = Date.now() / 1000) {
+      const win = windowSecs(name);
+      const left = resetsAt ? Math.max(0, resetsAt - now) : null;
+      const elapsed = win && left != null ? Math.min(1, Math.max(0, 1 - left / win)) : null;
+      let exhaustIn = null;
+      // stima del ritmo solo dopo il 10% della finestra (prima è rumore) e avviso solo se la
+      // proiezione a fine finestra supera il 115%: uno scarto di 1-2 punti è "in linea", non un allarme
+      if (elapsed != null && elapsed >= 0.1 && pct > 0 && pct < 100 && pct / elapsed > PACE_WARN) {
+        exhaustIn = (100 - pct) / (pct / (elapsed * win)); // secondi a 100% al ritmo medio attuale
       }
-      badge.style.display = '';
-      const multi = data.accounts.length > 1;
-      const parts = ['<i class="fa-solid fa-bolt" style="color:#79c0ff;font-size:11px;"></i>'];
-      data.accounts.forEach(acc => {
-        const windows = acc.windows || {};
-        if (multi) parts.push('<span style="color:#484f58;font-size:11px;">' + esc(acc.name) + '</span>');
-        WINDOW_ORDER.forEach(key => {
-          const w = windows[key];
-          if (!w) return;
-          const pct = Math.round(w.pct || 0);
-          const label = USAGE_SHORT[key] || key;
-          const reset = w.resets_short ? '<span style="color:#484f58;">↺' + esc(w.resets_short) + '</span>' : '';
-          parts.push('<span class="credit-service" title="' + esc(key + ' - ' + acc.name + ' - ' + (w.resets_in || '')) + '">' +
-            '<span class="status-dot" style="background:' + usageColor(pct) + '"></span>' +
-            esc(label) + ' ' + pct + '%' + reset +
-            '</span>');
-        });
-      });
-      badge.innerHTML = parts.join('') + (data._ts ? staleBadgeHTML(data._ts) : '');
+      const level = pct >= 95 ? 'crit' : exhaustIn != null ? 'warn' : 'ok';
+      return { elapsed, left, exhaustIn, level };
     }
 
-    export function renderUsageCompactSkeleton(badge) {
-      if (!badge) return;
-      badge.style.display = '';
-      badge.innerHTML = '<span class="credit-service"><span class="status-dot" style="background:#484f58"></span>usage ...</span>';
-    }
-
-    export function renderUsageCompactError(badge, message) {
-      if (!badge) return;
-      if (badge.dataset.ts) {
-        markStale(badge);
-        return;
+    function quotaRowHTML(w) {
+      const pc = quotaPace(w.pct, w.resets_at, w.name);
+      // reset già passato ma dato nuovo non ancora arrivato (cache backend ≤5min): niente % vecchia
+      if (pc.left === 0) {
+        return '<div class="quota-row muted" title="' + esc(w.name + ': ultimo dato ' + w.pct + '% prima del reset') + '">' +
+          '<span>' + esc(w.name) + '</span><div class="quota-bar"></div><span class="quota-pct">—</span>' +
+          '<span class="quota-reset">reset avvenuto</span>' +
+          '<span class="quota-note">in aggiornamento…</span></div>';
       }
-      badge.style.display = '';
-      badge.innerHTML =
-        '<span class="credit-service"><span class="status-dot" style="background:#484f58"></span>usage n/d</span>' +
-        '<button class="retry-btn" data-retry="slow" title="' + esc(message) + '"><i class="fas fa-rotate-right"></i></button>';
+      const color = { ok: QUOTA_OK, warn: QUOTA_WARN, crit: QUOTA_CRIT }[pc.level];
+      const tip = w.name + ': ' + w.pct + '% usato' +
+        (pc.elapsed != null ? ' · ' + Math.round(pc.elapsed * 100) + '% del tempo trascorso' : '') +
+        (w.resets_at ? ' · reset ' + new Date(w.resets_at * 1000).toLocaleString('it-IT', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+      const icon = pc.level === 'ok' ? '' : '<i class="fas fa-triangle-exclamation" style="color:' + color + '" aria-hidden="true"></i> ';
+      const note = pc.level === 'crit' ? 'quota quasi esaurita'
+        : pc.exhaustIn != null ? 'a questo ritmo finisce tra ~' + fmtDur(pc.exhaustIn) + ', prima del reset' : '';
+      return '<div class="quota-row" title="' + esc(tip) + '"><span>' + esc(w.name) + '</span>' +
+        '<div class="quota-bar"><div class="quota-fill" style="width:' + Math.min(w.pct, 100) + '%;background:' + color + '"></div>' +
+        (pc.elapsed != null ? '<div class="quota-tick" style="left:' + (pc.elapsed * 100).toFixed(1) + '%"></div>' : '') + '</div>' +
+        '<span class="quota-pct">' + icon + w.pct + '%</span>' +
+        '<span class="quota-reset">' + (pc.left != null ? '↺ ' + fmtDur(pc.left) : '') + '</span>' +
+        (note ? '<span class="quota-note" style="color:' + color + '">' + esc(note) + '</span>' : '') + '</div>';
+    }
+
+    // Ultimo payload: il countdown e la tacca si aggiornano in locale ogni 30s, senza fetch
+    let _quotaLast = null, _quotaTimer = null;
+
+    export function renderAiQuota(container, data) {
+      if (!container) return;
+      _quotaLast = { container, data };
+      if (!_quotaTimer) _quotaTimer = setInterval(() => {
+        if (!document.hidden && _quotaLast) renderAiQuota(_quotaLast.container, _quotaLast.data);
+      }, 30000);
+      container.innerHTML = (data.providers || []).map(p => {
+        const head = '<div class="quota-provider">' + esc(p.provider) +
+          (p.plan ? ' <span class="quota-plan">' + esc(p.plan) + '</span>' : '') +
+          (p.at ? ' ' + staleBadgeHTML(p.at).replace('stale-badge', 'stale-badge' + (p.stale ? ' warn' : '')) : '') +
+          (p.stale ? ' <span class="stale-badge warn">· ' + esc(p.stale) + '</span>' : '') + '</div>';
+        const rows = p.ok
+          ? (p.windows || []).map(quotaRowHTML).join('') || '<div class="quota-msg">nessuna finestra</div>'
+          : '<div class="quota-msg quota-err">n/d — ' + esc(p.error) + '</div>';
+        return '<div class="quota-card">' + head + rows + '</div>';
+      }).join('');
+    }
+
+    export function renderAiQuotaError(container, message) {
+      if (!container) return;
+      container.innerHTML = '<div class="quota-err">quote non disponibili — ' + esc(message) +
+        ' <button class="retry-btn" data-retry="slow"><i class="fas fa-rotate-right"></i></button></div>';
     }

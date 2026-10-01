@@ -2,7 +2,7 @@
     //
     // Refresh intelligente:
     // - veloce (10s): /api/status → kanban + profili + skill
-    // - lento (5min): credits + usage + health in parallelo
+    // - lento (5min): credits + AI quote + health in parallelo
     // - 304 Not Modified (ETag) → nessun re-render: modal aperti,
     //   scroll e righe espanse restano intatti.
 
@@ -22,9 +22,9 @@
       updateSkillsActivityContext, getSkillSortMode, setSkillSortMode,
     } from './skills.js';
     import {
-      renderCredits, renderUsageCompact,
+      renderCredits, renderAiQuota, renderAiQuotaError,
       renderGatewayPill, renderHealthPill,
-      renderUsageCompactSkeleton, renderUsageCompactError, markStale,
+      markStale,
     } from './widgets.js';
     import {
       openSkillModal, openSoulModal, openAgentsModal,
@@ -47,7 +47,7 @@
     const skillPrimaryContent = document.getElementById('skill-primary-content');
     const skillSortSelect = document.getElementById('skill-sort-select');
     const creditsBadge = document.getElementById('credits-badge');
-    const usageBadge = document.getElementById('usage-badge');
+    const aiQuotaContent = document.getElementById('ai-quota-content');
     const gatewayPill = document.getElementById('gateway-pill');
     const healthPill = document.getElementById('health-pill');
 
@@ -109,11 +109,11 @@
       }
     }
 
-    // ── Refresh lento: credits + usage + health in parallelo ───
+    // ── Refresh lento: credits + AI quote + health in parallelo ───
     async function refreshSlow() {
       const [creditsRes, usageRes, healthRes] = await Promise.allSettled([
         fetchJSON('/api/credits'),
-        fetchJSON('/api/opencode-usage'),
+        fetchJSON('/api/ai-quota'),
         fetchJSON('/api/health'),
       ]);
 
@@ -141,17 +141,16 @@
         console.error('credits:', creditsRes.reason);
       }
 
-      // Usage (pill compatta nella barra controlli)
+      // AI quote (pannello; dati vecchi per provider gestiti dal backend)
       if (usageRes.status === 'fulfilled') {
         if (usageRes.value !== NOT_MODIFIED) {
-          renderUsageCompact(usageBadge, usageRes.value);
+          renderAiQuota(aiQuotaContent, usageRes.value);
           hasData.usage = true;
         }
       } else if (!hasData.usage) {
-        renderUsageCompactError(usageBadge, usageRes.reason.message);
+        renderAiQuotaError(aiQuotaContent, usageRes.reason.message);
       } else {
-        markStale(usageBadge);
-        console.error('usage:', usageRes.reason);
+        console.error('ai-quota:', usageRes.reason);
       }
       const fi2 = document.getElementById('filter-input');
       if (fi2 && fi2.value) fi2.dispatchEvent(new Event('input')); // re-applica filtro ai nodi ri-renderizzati
@@ -159,7 +158,7 @@
 
     // ── Refresh manuale = force (droppa ETag: ricarica tutto, non solo il cambiato) ──
     async function refreshAll() {
-      ['/api/status', '/api/credits', '/api/opencode-usage']
+      ['/api/status', '/api/credits', '/api/ai-quota']
         .forEach(dropEtag);
       await Promise.allSettled([refreshFast(), refreshSlow()]);
     }
@@ -288,7 +287,7 @@
     // Skeleton al primo avvio, poi doppio refresh in parallelo
     renderKanbanSkeleton(kanbanBoard);
     renderProfilesSkeleton(profilesBody);
-    renderUsageCompactSkeleton(usageBadge);
+    aiQuotaContent.innerHTML = '<div class="quota-msg">caricamento quote…</div>';
     renderHealthPill(healthPill, null);
 
     let fastTimer = null;

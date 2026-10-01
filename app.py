@@ -16,9 +16,9 @@ from pathlib import Path
 import yaml
 from flask import Flask, jsonify, request, Response
 
+import ai_quota
 import credit_check
 import health_check
-import opencode_usage_scraper
 
 app = Flask(__name__)
 
@@ -1100,13 +1100,13 @@ def api_skill_delete(profile_name):
     })
 
 
-@app.route('/api/opencode-usage')
-def api_opencode_usage():
-    """GET /api/opencode-usage → JSON con usage OpenCode (1 account).
-       GET /api/opencode-usage?force=1 → ignora cache.
+@app.route('/api/ai-quota')
+def api_ai_quota():
+    """GET /api/ai-quota → quote 5h/weekly di Claude Code, Codex, OpenCode Go, AGY.
+       GET /api/ai-quota?force=1 → ignora la cache (mai sotto 60s per provider).
     """
     force = request.args.get('force', '').lower() in ('1', 'true')
-    return _etag_response(opencode_usage_scraper.run(force=force))
+    return _etag_response(ai_quota.status(force=force))
 
 
 @app.route('/')
