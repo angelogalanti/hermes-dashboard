@@ -8,6 +8,7 @@ Vedere in un'unica interfaccia:
 - Elenco profili creati
 - Per ogni profilo: stato gateway, modello e provider di default
 - Task del kanban board
+- Quote AI 5h/weekly di Claude Code, Codex, OpenCode Go e AGY (Gemini)
 
 ## Stack
 
@@ -67,6 +68,22 @@ systemctl --user disable hermes-dashboard
 |----------------|------------------------------------------|
 | `GET /`        | Pagina dashboard HTML                    |
 | `GET /api/status` | JSON: profili + task kanban          |
+| `GET /api/ai-quota` | JSON: quote 5h/weekly per provider (`?force=1` ignora la cache) |
+
+## Quote AI
+
+Il pannello "AI quote" legge i token che le CLI salvano in locale e interroga
+gli endpoint (non documentati) delle quote, con cache di 5 minuti per provider.
+Se un provider fallisce mostra l'ultimo dato buono (`~/.hermes/dashboard-data/ai-quota.json`).
+
+| Provider | Credenziali usate |
+|----------|-------------------|
+| Claude Code | `~/.claude/.credentials.json` (riusa la cache di ccstatusline se recente) |
+| Codex | `~/.codex/auth.json` |
+| OpenCode Go | `OPENCODE_GO_API_KEY` in `~/.hermes/.env` |
+| AGY | `~/.gemini/antigravity-cli/antigravity-oauth-token` + `AGY_OAUTH_CLIENT_ID` / `AGY_OAUTH_CLIENT_SECRET` in `~/.hermes/.env` (client OAuth dell'app Antigravity, serve per il refresh del token) |
+
+Test: `venv/bin/python test_ai_quota.py` e `node test_quota_pace.mjs`.
 
 ## Verifica
 
