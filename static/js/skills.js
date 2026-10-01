@@ -259,11 +259,13 @@
         return {
           state: 'unused',
           label: 'Mai usata',
-          color: '#484f58',
-          badge: '',
+          badgeLabel: 'Mai usata',
+          color: '#8b949e',
           score: 0,
           daysAgo: 9999,
           velocity: 0,
+          velText: '',
+          titleTooltip: 'Punteggio calore: 0/100 · Mai usata finora',
         };
       }
 
@@ -292,16 +294,19 @@
       // Una skill è considerata "nuova/giovane" se la sua età rientra nel quartile Q1 o entro 7 giorni
       const isNew = lifetimeDays <= Math.max(aq.q1, 7);
       const isRecentlyUsed = daysAgo <= rq.med;
+      const agoText = timeAgo(sk.last_used_at) || `${Math.round(daysAgo)}gg fa`;
 
       if (isNew && isRecentlyUsed) {
         return {
           state: 'new-active',
           label: 'Nuova & attiva',
+          badgeLabel: '✨ Nuova',
           color: '#00cbd6',
-          badge: velText ? `✨ nuova · ${velText}` : '✨ nuova',
           score,
           daysAgo,
           velocity,
+          velText,
+          titleTooltip: `Punteggio calore: ${score}/100 · Nuova skill creata ${Math.round(lifetimeDays)}gg fa e già usata ${sk.use_count} volte (freq: ${velText || 'recente'})`,
         };
       }
 
@@ -309,11 +314,13 @@
         return {
           state: 'active-hot',
           label: 'Molto attiva',
+          badgeLabel: '🔥 Molto attiva',
           color: '#3fb950',
-          badge: velText ? `🔥 ${velText}` : '🔥 frequente',
           score,
           daysAgo,
           velocity,
+          velText,
+          titleTooltip: `Punteggio calore: ${score}/100 · Molto attiva: usata ${sk.use_count} volte, ultimo uso ${agoText} (freq: ${velText || 'alta'})`,
         };
       }
 
@@ -321,11 +328,13 @@
         return {
           state: 'active-warm',
           label: 'Attiva',
+          badgeLabel: 'Attiva',
           color: '#56d364',
-          badge: '', // Molto discreta: le skill attive standard non hanno badge rumoroso
           score,
           daysAgo,
           velocity,
+          velText,
+          titleTooltip: `Punteggio calore: ${score}/100 · Attiva: usata ${sk.use_count} volte, ultimo uso ${agoText}`,
         };
       }
 
@@ -333,11 +342,13 @@
         return {
           state: 'cooling',
           label: 'In calo',
+          badgeLabel: 'In calo',
           color: '#d29922',
-          badge: 'in calo',
           score,
           daysAgo,
           velocity,
+          velText,
+          titleTooltip: `Punteggio calore: ${score}/100 · In calo: ultimo uso ${agoText} (ferma da ${Math.round(daysAgo)} giorni)`,
         };
       }
 
@@ -345,11 +356,13 @@
       return {
         state: 'stale',
         label: wasUsedALot ? 'Ex-usata in disuso' : 'In disuso',
+        badgeLabel: wasUsedALot ? '⚠️ Ex-usata' : 'In disuso',
         color: '#f85149',
-        badge: wasUsedALot ? '⚠️ ex-usata' : 'in disuso',
         score,
         daysAgo,
         velocity,
+        velText,
+        titleTooltip: `Punteggio calore: ${score}/100 · ${wasUsedALot ? 'Ex-usata' : 'In disuso'}: usata ${sk.use_count} volte in passato ma ferma da ${Math.round(daysAgo)} giorni`,
       };
     }
 
@@ -385,7 +398,7 @@
       const act = getSkillActivity(sk);
       const card = document.createElement('div');
       card.className = 'skill-card state-' + act.state + (sk.use_count > 0 ? '' : ' unused');
-      card.title = sk.use_count > 0 ? 'Stato: ' + act.label + ' (score calore: ' + act.score + '/100)' : 'Mai usata';
+      card.title = act.titleTooltip;
       const useLabel = sk.use_count > 0 ? 'usata ' + sk.use_count + ' volte' : 'mai usata';
       const ago = sk.last_used_at ? timeAgo(sk.last_used_at) : '';
       const prov = sk.provenance || 'ours'; // payload vecchi senza campo
@@ -402,9 +415,10 @@
         ? '<i class="fa-solid fa-thumbtack" style="color:#d29922;font-size:11px;" title="Pinned"></i> '
         : '';
 
-      const actBadgeHtml = (act.state !== 'unused' && act.badge)
-        ? '<span class="skill-act-badge state-' + act.state + '">' + esc(act.badge) + '</span>'
-        : '';
+      const actBadgeHtml =
+        '<span class="skill-act-badge state-' + act.state + '" title="' + esc(act.titleTooltip) + '">' +
+          esc(act.badgeLabel) + ' <span class="skill-act-score">' + act.score + '</span>' +
+        '</span>';
 
       card.innerHTML =
         '<button class="skill-card-delete" title="Cancella skill" ' + delAttrs + '>' +

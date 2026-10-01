@@ -42,13 +42,14 @@
         actEl.style.background = 'rgba(255,255,255,0.06)';
         actEl.style.border = '1px solid ' + act.color + '44';
         actEl.style.color = act.color;
-        actEl.innerHTML = esc(act.label) + (act.badge ? ' &middot; ' + esc(act.badge) : '') + ' &middot; <span style="color:#8b949e;">calore: ' + act.score + '/100</span>';
+        actEl.innerHTML = esc(act.badgeLabel || act.label) + ' &middot; <span style="font-weight:700;">' + act.score + '/100</span>' +
+          (act.velText ? ' &middot; <span style="color:#8b949e;">' + esc(act.velText) + '</span>' : '');
       } else {
         actEl.style.display = 'inline-flex';
         actEl.style.background = 'rgba(255,255,255,0.04)';
         actEl.style.border = '1px solid #30363d';
         actEl.style.color = '#8b949e';
-        actEl.textContent = 'Mai usata';
+        actEl.innerHTML = 'Mai usata &middot; <span style="font-weight:700;">0/100</span>';
       }
 
       setModalDate('modal-created-at', skillObj.created_at);
