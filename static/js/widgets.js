@@ -153,14 +153,14 @@
       return { elapsed, left, exhaustIn, level };
     }
 
-    function quotaRowHTML(w) {
+    function quotaRowHTML(w, stale) {
       const pc = quotaPace(w.pct, w.resets_at, w.name);
       // reset già passato ma dato nuovo non ancora arrivato (cache backend ≤5min): niente % vecchia
       if (pc.left === 0) {
         return '<div class="quota-row muted" title="' + esc(w.name + ': ultimo dato ' + w.pct + '% prima del reset') + '">' +
           '<span>' + esc(w.name) + '</span><div class="quota-bar"></div><span class="quota-pct">—</span>' +
           '<span class="quota-reset">reset avvenuto</span>' +
-          '<span class="quota-note">in aggiornamento…</span></div>';
+          (stale ? '' : '<span class="quota-note">in aggiornamento…</span>') + '</div>';
       }
       const color = { ok: QUOTA_OK, warn: QUOTA_WARN, crit: QUOTA_CRIT }[pc.level];
       const tip = w.name + ': ' + w.pct + '% usato' +
@@ -192,7 +192,7 @@
           (p.at ? ' ' + staleBadgeHTML(p.at).replace('stale-badge', 'stale-badge' + (p.stale ? ' warn' : '')) : '') +
           (p.stale ? ' <span class="stale-badge warn">· ' + esc(p.stale) + '</span>' : '') + '</div>';
         const rows = p.ok
-          ? (p.windows || []).map(quotaRowHTML).join('') || '<div class="quota-msg">nessuna finestra</div>'
+          ? (p.windows || []).map(w => quotaRowHTML(w, p.stale)).join('') || '<div class="quota-msg">nessuna finestra</div>'
           : '<div class="quota-msg quota-err">n/d — ' + esc(p.error) + '</div>';
         return '<div class="quota-card">' + head + rows + '</div>';
       }).join('');
