@@ -50,4 +50,44 @@ aisub._cache['X']['ts'] = 0
 r = aisub.status()['providers'][0]
 assert r['ok'] and r['windows'][0]['pct'] == 1.0 and 'RuntimeError' in r['stale']
 
+# ── Test Refill Alert ──
+mock_alerts = {}
+aisub.load_alerts_state = lambda: mock_alerts
+aisub.save_alerts_state = lambda s: mock_alerts.update(s)
+sent_notifications = []
+aisub.send_refill_notification = lambda p, pct, r: sent_notifications.append((p, pct, r))
+
+# 1. Quota sotto soglia (84%) -> nessun alert armato
+res_low = [{'provider': 'TestLow', 'ok': True, 'windows': [{'name': '5h', 'pct': 84.0, 'resets_at': 2000}]}]
+alerts = aisub.check_and_arm_alerts(res_low)
+assert 'TestLow' not in alerts or not alerts['TestLow'].get('armed')
+
+# 2. Quota a soglia o sopra (95%) -> alert armato
+res_high = [{'provider': 'TestHigh', 'ok': True, 'windows': [{'name': '5h', 'pct': 95.0, 'resets_at': 2000}]}]
+alerts = aisub.check_and_arm_alerts(res_high)
+assert alerts['TestHigh']['armed'] is True
+assert alerts['TestHigh']['peak_pct'] == 95.0
+assert alerts['TestHigh']['resets_at'] == 2000
+
+# 3. Prima del reset time -> nessun alert inviato
+real_time = aisub.time.time
+mock_time = 1999
+aisub.time.time = lambda: mock_time
+aisub.process_refill_alerts()
+assert len(sent_notifications) == 0
+assert mock_alerts['TestHigh']['armed'] is True
+
+# 4. Al reset time o dopo -> notifica inviata e alert disarmato
+mock_time = 2001
+aisub.process_refill_alerts()
+assert len(sent_notifications) == 1
+assert sent_notifications[0][0] == 'TestHigh'
+assert sent_notifications[0][1] == 95.0
+assert mock_alerts['TestHigh']['armed'] is False
+
+# 5. Esecuzione successiva -> nessuna notifica duplicata
+aisub.process_refill_alerts()
+assert len(sent_notifications) == 1
+aisub.time.time = real_time
+
 print('ok')

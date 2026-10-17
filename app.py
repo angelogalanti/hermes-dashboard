@@ -29,6 +29,9 @@ logging.basicConfig(
 )
 log = logging.getLogger('hermes-dashboard')
 
+# ── Monitor quote in background (alert refill 5h) ────────────────
+ai_quota.start_monitor()
+
 # ── Cache in-memory per /api/status (scansioni disco+sqlite costose) ──
 _STATUS_CACHE: dict = {'ts': 0.0, 'payload': None}
 STATUS_CACHE_TTL = 10  # secondi (allineato al refresh veloce del frontend)

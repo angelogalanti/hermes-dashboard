@@ -6,7 +6,10 @@ persistito su disco così sopravvive ai riavvii della dashboard.
 """
 
 import json
+import logging
 import os
+import subprocess
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -19,6 +22,11 @@ HOME = Path.home()
 CACHE_FILE = HOME / '.hermes' / 'dashboard-data' / 'ai-quota.json'
 CACHE_TTL = 300  # 5 min: le finestre 5h non cambiano utilmente al minuto; Claude risponde 429 se più fitto
 TIMEOUT = 10
+
+# ── Alert Refill 5h (notifiche quando una quota quasi satura si resetta) ──
+ALERTS_FILE = HOME / '.hermes' / 'dashboard-data' / 'quota-refill-alerts.json'
+REFILL_THRESHOLD = 85.0  # % di saturazione oltre cui armare l'alert per la finestra 5h
+log = logging.getLogger('hermes-dashboard.ai_quota')
 
 
 def _get(url, headers, body=None):  # body → POST form/JSON già codificato
@@ -224,8 +232,173 @@ def _run(name, force):
     return c['result']
 
 
+# ── Gestione Alert e Notifiche ─────────────────────────────────────
+
+def load_alerts_state():
+    try:
+        return json.loads(ALERTS_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def save_alerts_state(state):
+    try:
+        ALERTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        ALERTS_FILE.write_text(json.dumps(state, indent=2))
+    except OSError:
+        pass
+
+
+def notify_desktop(title, message):
+    """Notifica popup su Linux via notify-send."""
+    try:
+        env = os.environ.copy()
+        env.setdefault('DISPLAY', ':0')
+        env.setdefault('WAYLAND_DISPLAY', 'wayland-0')
+        env.setdefault('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus')
+        subprocess.run(
+            ['notify-send', '-a', 'Hermes Dashboard', '-u', 'normal', title, message],
+            env=env,
+            timeout=5,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as e:
+        log.warning(f"notify-send fallito: {e}")
+
+
+def notify_telegram(title, message):
+    """Invia notifica Telegram a TELEGRAM_HOME_CHANNEL via TELEGRAM_BOT_TOKEN."""
+    try:
+        token = _env('TELEGRAM_BOT_TOKEN')
+        chat_id = _env('TELEGRAM_HOME_CHANNEL')
+        text = f"{title}\n\n{message}"
+        payload = json.dumps({'chat_id': chat_id, 'text': text, 'parse_mode': 'Markdown'}).encode()
+        req = urllib.request.Request(
+            f'https://api.telegram.org/bot{token}/sendMessage',
+            data=payload,
+            headers={'Content-Type': 'application/json'}
+        )
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as _:
+            pass
+    except Exception as e:
+        log.warning(f"Telegram notification fallita: {e}")
+
+
+def send_refill_notification(provider, peak_pct, reset_ts=None):
+    """Invia notifica di refill sia su Telegram sia su Desktop."""
+    reset_str = time.strftime('%H:%M', time.localtime(reset_ts)) if reset_ts else 'adesso'
+    title = f"⚡ Refill Quota 5h: {provider}"
+    tg_text = (
+        f"La quota delle 5 ore per *{provider}* è tornata disponibile!\n"
+        f"• Utilizzo precedente: *{peak_pct}%*\n"
+        f"• Reset avvenuto alle: *{reset_str}*"
+    )
+    desktop_text = f"La quota è di nuovo disponibile (era al {peak_pct}%). Reset ore {reset_str} completato."
+    notify_telegram(title, tg_text)
+    notify_desktop(title, desktop_text)
+    log.info(f"Refill notification inviata per {provider} (picco {peak_pct}%, reset {reset_str})")
+
+
+def check_and_arm_alerts(providers_results):
+    """Arma o aggiorna gli alert se la finestra 5h supera REFILL_THRESHOLD."""
+    alerts = load_alerts_state()
+    changed = False
+    for p in providers_results:
+        if not p.get('ok'):
+            continue
+        name = p.get('provider')
+        w5h = next((w for w in p.get('windows', []) if w.get('name') == '5h'), None)
+        if not w5h:
+            continue
+        pct = w5h.get('pct', 0.0)
+        resets_at = w5h.get('resets_at')
+        entry = alerts.get(name, {})
+
+        if pct >= REFILL_THRESHOLD:
+            # Nuova saturazione o picco più alto o nuova finestra
+            if not entry.get('armed') or entry.get('resets_at') != resets_at or pct > entry.get('peak_pct', 0):
+                alerts[name] = {
+                    'armed': True,
+                    'peak_pct': max(pct, entry.get('peak_pct', 0) if entry.get('armed') else pct),
+                    'resets_at': resets_at,
+                    'armed_at': time.time(),
+                    'last_alert_at': entry.get('last_alert_at'),
+                }
+                changed = True
+                log.info(f"Alert refill armato per {name}: 5h al {pct}% (reset a {resets_at})")
+        elif entry.get('armed') and entry.get('resets_at') and resets_at and resets_at > entry.get('resets_at'):
+            # Reset già avvenuto rilevato durante un normale fetch
+            send_refill_notification(name, entry.get('peak_pct', pct), entry.get('resets_at'))
+            entry['armed'] = False
+            entry['last_alert_at'] = time.time()
+            alerts[name] = entry
+            changed = True
+
+    if changed:
+        save_alerts_state(alerts)
+    return alerts
+
+
+def process_refill_alerts():
+    """Controlla se per qualche provider armato è scoccato il reset delle 5 ore."""
+    alerts = load_alerts_state()
+    now = time.time()
+    changed = False
+
+    for name, entry in alerts.items():
+        if not entry.get('armed'):
+            continue
+        resets_at = entry.get('resets_at')
+        if not resets_at:
+            continue
+
+        if now >= resets_at:
+            if name in PROVIDERS:
+                try:
+                    _run(name, force=True)
+                except Exception:
+                    pass
+
+            send_refill_notification(name, entry.get('peak_pct', 100.0), resets_at)
+            entry['armed'] = False
+            entry['last_alert_at'] = now
+            changed = True
+
+    if changed:
+        save_alerts_state(alerts)
+
+
+_monitor_thread = None
+_monitor_stop = False
+
+
+def _monitor_loop():
+    last_full_poll = 0
+    while not _monitor_stop:
+        try:
+            now = time.time()
+            process_refill_alerts()
+            if now - last_full_poll >= CACHE_TTL:
+                status(force=False)
+                last_full_poll = now
+        except Exception as e:
+            log.warning(f"Errore nel loop monitor ai_quota: {e}")
+        time.sleep(30)
+
+
+def start_monitor():
+    global _monitor_thread
+    if _monitor_thread is None or not _monitor_thread.is_alive():
+        _monitor_thread = threading.Thread(target=_monitor_loop, daemon=True, name='quota-monitor')
+        _monitor_thread.start()
+        log.info("Quota refill monitor avviato in background (thread)")
+
+
 def status(force=False):
     with ThreadPoolExecutor() as ex:
         results = list(ex.map(lambda n: _run(n, force), PROVIDERS))
     _save_last_ok()
-    return {'providers': results}  # niente timestamp globale: l'ETag cambia solo se cambiano i dati
+    alerts = check_and_arm_alerts(results)
+    return {'providers': results, 'alerts': alerts}

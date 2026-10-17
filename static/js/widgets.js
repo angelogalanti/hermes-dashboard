@@ -186,8 +186,13 @@
       if (!_quotaTimer) _quotaTimer = setInterval(() => {
         if (!document.hidden && _quotaLast) renderAiQuota(_quotaLast.container, _quotaLast.data);
       }, 30000);
+      const alerts = data.alerts || {};
       container.innerHTML = (data.providers || []).map(p => {
-        const head = '<div class="quota-provider">' + esc(p.provider) +
+        const al = alerts[p.provider];
+        const alertBadge = (al && al.armed)
+          ? ' <span class="stale-badge" title="Alert refill 5h armato (era al ' + al.peak_pct + '%): notifica attiva al reset"><i class="fas fa-bell"></i> refill armato</span>'
+          : '';
+        const head = '<div class="quota-provider">' + esc(p.provider) + alertBadge +
           (p.plan ? ' <span class="quota-plan">' + esc(p.plan) + '</span>' : '') +
           (p.at ? ' ' + staleBadgeHTML(p.at).replace('stale-badge', 'stale-badge' + (p.stale ? ' warn' : '')) : '') +
           (p.stale ? ' <span class="stale-badge warn">· ' + esc(p.stale) + '</span>' : '') + '</div>';
