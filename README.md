@@ -83,6 +83,14 @@ Se un provider fallisce mostra l'ultimo dato buono (`~/.hermes/dashboard-data/ai
 | OpenCode Go | `OPENCODE_GO_API_KEY` in `~/.hermes/.env` |
 | AGY | `~/.gemini/antigravity-cli/antigravity-oauth-token` + `AGY_OAUTH_CLIENT_ID` / `AGY_OAUTH_CLIENT_SECRET` in `~/.hermes/.env` (client OAuth dell'app Antigravity, serve per il refresh del token) |
 
+### Alert Refill Quota 5h
+
+Se l'utilizzo della finestra 5h di un provider raggiunge o supera l'**85%**, la dashboard arma automaticamente un alert in background:
+- **Monitoraggio continuo**: un thread interno verifica ogni 30 secondi lo scadere del timestamp `resets_at`.
+- **Notifiche duali**: al reset della finestra invia un alert sia su **Telegram** (`@hermes_bot`) sia come **notifica desktop** nativa (Windows Toast con suono su WSL2, `notify-send` su Linux).
+- **Zero spam**: notifica una sola volta per ciclo e solo se la quota era satura prima del reset.
+- **Persistenza**: lo stato degli alert è salvato in `~/.hermes/dashboard-data/quota-refill-alerts.json` e sopravvive ai riavvii.
+
 Test: `venv/bin/python test_ai_quota.py` e `node test_quota_pace.mjs`.
 
 ## Verifica
