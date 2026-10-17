@@ -250,7 +250,36 @@ def save_alerts_state(state):
 
 
 def notify_desktop(title, message):
-    """Notifica popup su Linux via notify-send."""
+    """Notifica popup su Desktop (supporta sia Linux nativo via notify-send, sia Windows via WSL)."""
+    # 1. Se siamo in ambiente WSL2, invia Toast nativo a Windows tramite powershell.exe
+    ps_path = Path('/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe')
+    if ps_path.is_file():
+        try:
+            safe_title = title.replace("'", "''").replace('"', '`"')
+            safe_msg = message.replace("'", "''").replace('"', '`"')
+            ps_script = f"""
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+$template = [Windows.UI.Notifications.ToastTemplateType]::ToastText02
+$xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($template)
+$textNodes = $xml.GetElementsByTagName('text')
+$textNodes.Item(0).AppendChild($xml.CreateTextNode('{safe_title}')) | Out-Null
+$textNodes.Item(1).AppendChild($xml.CreateTextNode('{safe_msg}')) | Out-Null
+$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}}\\WindowsPowerShell\\v1.0\\powershell.exe')
+$notification = [Windows.UI.Notifications.ToastNotification]::new($xml)
+$notifier.Show($notification)
+"""
+            subprocess.run(
+                [str(ps_path), '-NoProfile', '-Command', ps_script],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False
+            )
+        except Exception as e:
+            log.warning(f"Windows toast via powershell fallito: {e}")
+
+    # 2. Invia anche notify-send per ambienti Linux / X11 / Wayland
     try:
         env = os.environ.copy()
         env.setdefault('DISPLAY', ':0')
