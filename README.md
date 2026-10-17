@@ -19,7 +19,7 @@ Vedere in un'unica interfaccia:
 ## Avvio
 
 ```bash
-cd ~/repos/hermes-dashboard
+cd ~/repos/utilities/hermes-dashboard
 ./run.sh
 ```
 
@@ -31,7 +31,7 @@ Opzioni:
 ## Fermata
 
 ```bash
-cd ~/repos/hermes-dashboard
+cd ~/repos/utilities/hermes-dashboard
 ./stop.sh
 ```
 
