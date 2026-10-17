@@ -258,6 +258,7 @@ def notify_desktop(title, message):
             safe_title = title.replace("'", "''").replace('"', '`"')
             safe_msg = message.replace("'", "''").replace('"', '`"')
             ps_script = f"""
+[System.Media.SystemSounds]::Asterisk.Play()
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
 $template = [Windows.UI.Notifications.ToastTemplateType]::ToastText02
 $xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($template)
